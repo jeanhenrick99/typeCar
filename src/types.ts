@@ -10,8 +10,6 @@ export interface CarModel {
   tagline: string;
   /** Cor de vitrine usada na lista da garagem */
   signature: string;
-  /** 0-10 cosmetic stats shown in the garage */
-  stats: { aceleracao: number; velocidade: number; controle: number };
 }
 
 export interface TrackTheme {

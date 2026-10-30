@@ -10,27 +10,6 @@ import { TrackPreview } from '../components/TrackPreview';
 import { useProfile } from '../state/ProfileContext';
 import { audio } from '../lib/audio';
 
-function StatBar({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <div className="flex justify-between">
-        <span className="hud-label">{label}</span>
-        <span className="font-display text-xs text-white/60">{value}/10</span>
-      </div>
-      <div className="mt-1 flex gap-1">
-        {Array.from({ length: 10 }).map((_, i) => (
-          <motion.span
-            key={i}
-            initial={false}
-            animate={{ opacity: i < value ? 1 : 0.15 }}
-            className={`h-2 flex-1 skew-x-[-20deg] ${i < value ? (i >= 8 ? 'bg-blaze' : 'bg-volt') : 'bg-white'}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function GarageScreen({ onPlay }: { onPlay: () => void }) {
   const { profile, update } = useProfile();
   const car = getCarModel(profile.carId);
@@ -61,7 +40,7 @@ export function GarageScreen({ onPlay }: { onPlay: () => void }) {
           </GameButton>
         </div>
 
-        {/* Destaque: carro + desempenho e pintura */}
+        {/* Destaque: carro + motor e pintura */}
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_340px]">
           <div className="relative cut-corner glass flex flex-col justify-center overflow-hidden px-4 pb-5 pt-6 sm:px-8">
             <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[radial-gradient(ellipse_at_50%_100%,rgba(0,212,255,0.25),transparent_70%)]" />
@@ -85,21 +64,18 @@ export function GarageScreen({ onPlay }: { onPlay: () => void }) {
           </div>
 
           <div className="flex flex-col gap-4">
-            <div className="cut-corner glass flex-1 space-y-3 px-5 py-4">
-              <p className="hud-label">Desempenho</p>
-              <StatBar label="Aceleração" value={car.stats.aceleracao} />
-              <StatBar label="Velocidade" value={car.stats.velocidade} />
-              <StatBar label="Controle" value={car.stats.controle} />
-              <p className="pt-1 font-hud text-xs text-white/35">Atributos visuais — na pista, quem manda são seus dedos.</p>
+            <div className="cut-corner glass flex flex-1 flex-col justify-center gap-3 px-5 py-4">
+              <p className="hud-label">Motor</p>
               <button
                 onClick={() => audio.previewEngine(car.id)}
-                className="group flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 transition hover:border-volt/50 hover:bg-volt/10"
+                className="group flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-3 transition hover:border-volt/50 hover:bg-volt/10"
                 title={profile.sfx ? 'Ouvir o motor' : 'Ative os efeitos sonoros nas configurações'}
               >
                 <span className="flex items-center gap-2 font-display text-[11px] font-bold uppercase tracking-[0.18em] text-white/80 group-hover:text-white">
                   <IconVolume className="h-4 w-4 text-volt" /> Ouvir motor
                 </span>
               </button>
+              <p className="font-hud text-xs text-white/35">Todos os carros são iguais na pista: quem manda são seus dedos.</p>
             </div>
 
             <div className="cut-corner glass px-5 py-4">
