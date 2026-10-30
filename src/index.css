@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --volt: #00d4ff;
+  --blaze: #ff6a00;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-asphalt-950 text-white font-hud antialiased;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: rgba(0, 212, 255, 0.35);
+}
+
+@layer components {
+  .skew-panel {
+    clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  }
+  .cut-corner {
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+  }
+  .glass {
+    @apply bg-asphalt-900/70 backdrop-blur-md border border-white/10;
+  }
+  .hud-label {
+    @apply font-display text-[10px] tracking-[0.25em] uppercase text-white/50;
+  }
+  .text-glow-volt {
+    text-shadow: 0 0 18px rgba(0, 212, 255, 0.7), 0 0 4px rgba(0, 212, 255, 0.9);
+  }
+  .text-glow-blaze {
+    text-shadow: 0 0 18px rgba(255, 106, 0, 0.7), 0 0 4px rgba(255, 106, 0, 0.9);
+  }
+  .grid-floor {
+    background-image:
+      linear-gradient(rgba(0, 212, 255, 0.18) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 255, 0.18) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0a0e18; }
+::-webkit-scrollbar-thumb { background: #26304a; border-radius: 4px; }
+
+input[type='range'] {
+  accent-color: var(--volt);
+}
+
+@keyframes gridMove {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 0 60px, 0 0; }
+}
+@keyframes roadDash {
+  from { transform: translateX(0); }
+  to { transform: translateX(-160px); }
+}
+@keyframes streakFly {
+  0% { transform: translateX(110vw) scaleX(0.4); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateX(-30vw) scaleX(1); opacity: 0; }
+}
+.animate-grid { animation: gridMove 0.6s linear infinite; }
+.animate-road { animation: roadDash 0.35s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-grid, .animate-road { animation: none; }
+}
