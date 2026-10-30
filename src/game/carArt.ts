@@ -138,6 +138,174 @@ function repaint(img: HTMLImageElement, meta: CarArtMeta, color: string | null):
   return c;
 }
 
+// ───────────── pinças de freio ─────────────
+
+interface Caliper {
+  img: HTMLCanvasElement;
+  x: number;
+  y: number;
+}
+
+/** Pinças recortadas de cada arte pintada, desenhadas paradas sobre a roda que gira */
+const calipers = new WeakMap<HTMLCanvasElement, Caliper[]>();
+/** Cópia da arte sem as pinças, usada como fonte das rodas que giram */
+const wheelSources = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+/**
+ * Encontra a pinça de cada roda: a maior mancha colorida e saturada dentro do
+ * aro, fora do cubo. Os trechos cobertos pelos raios na imagem são preenchidos
+ * com a cor média da pinça, para ela ficar inteira quando os raios girarem.
+ */
+function extractCalipers(art: HTMLCanvasElement, meta: CarArtMeta): Caliper[] {
+  const ctx = art.getContext('2d', { willReadFrequently: true })!;
+  const out: Caliper[] = [];
+  const src = document.createElement('canvas');
+  src.width = art.width;
+  src.height = art.height;
+  const sctx = src.getContext('2d')!;
+  sctx.drawImage(art, 0, 0);
+  wheelSources.set(art, src);
+  for (const [hx, hy, , , rx, ry] of meta.wheels) {
+    const ex = rx * RIM_RATIO * 0.98;
+    const ey = ry * RIM_RATIO * 0.98;
+    const x0 = Math.max(0, Math.floor(hx - ex));
+    const y0 = Math.max(0, Math.floor(hy - ey));
+    const w = Math.min(art.width - x0, Math.ceil(ex * 2) + 1);
+    const h = Math.min(art.height - y0, Math.ceil(ey * 2) + 1);
+    if (w < 4 || h < 4) continue;
+    const data = ctx.getImageData(x0, y0, w, h);
+    const d = data.data;
+    const N = w * h;
+
+    // 1. pixels coloridos dentro do aro (fora do cubo central)
+    const cand = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      const px = x0 + (i % w) - hx;
+      const py = y0 + ((i / w) | 0) - hy;
+      const v = (px / ex) ** 2 + (py / ey) ** 2;
+      if (v > 1 || v < 0.06) continue;
+      if (d[i * 4 + 3] < 200) continue;
+      const [, sat, l] = rgbToHsl(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+      if (sat >= 0.36 && l >= 0.18 && l <= 0.85) cand[i] = 1;
+    }
+
+    // 2. fechamento (dilata e erode) para juntar os pedaços separados pelos raios
+    const R = Math.max(3, Math.round(ry * 0.07));
+    const morph = (src: Uint8Array, grow: boolean) => {
+      const dst = new Uint8Array(N);
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) {
+          let hit = grow ? 0 : 1;
+          for (let dy = -R; dy <= R && (grow ? !hit : hit); dy++)
+            for (let dx = -R; dx <= R; dx++) {
+              const xx = x + dx;
+              const yy = y + dy;
+              const val = xx >= 0 && yy >= 0 && xx < w && yy < h ? src[yy * w + xx] : 0;
+              if (grow && val) {
+                hit = 1;
+                break;
+              }
+              if (!grow && !val) {
+                hit = 0;
+                break;
+              }
+            }
+          dst[y * w + x] = hit;
+        }
+      return dst;
+    };
+    const closed = morph(morph(cand, true), false);
+
+    // 3. maior região = pinça
+    const lab = new Int32Array(N).fill(-1);
+    let best = -1;
+    let bestSize = 0;
+    for (let s0 = 0; s0 < N; s0++) {
+      if (!closed[s0] || lab[s0] >= 0) continue;
+      const stack = [s0];
+      lab[s0] = s0;
+      let size = 0;
+      while (stack.length) {
+        const i = stack.pop()!;
+        size++;
+        const x = i % w;
+        const y = (i / w) | 0;
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) {
+          if (j >= 0 && closed[j] && lab[j] < 0) {
+            lab[j] = s0;
+            stack.push(j);
+          }
+        }
+      }
+      if (size > bestSize) {
+        bestSize = size;
+        best = s0;
+      }
+    }
+    // pinça pequena demais (ou inexistente): a roda gira inteira
+    if (best < 0 || bestSize < ex * ey * 0.025) continue;
+
+    // 4. cor média para preencher os trechos escondidos pelos raios
+    let sr = 0, sg = 0, sb = 0, n = 0;
+    for (let i = 0; i < N; i++)
+      if (lab[i] === best && cand[i]) {
+        sr += d[i * 4];
+        sg += d[i * 4 + 1];
+        sb += d[i * 4 + 2];
+        n++;
+      }
+    const fr = (sr / n) * 0.8, fg = (sg / n) * 0.8, fb = (sb / n) * 0.8;
+
+    const img = document.createElement('canvas');
+    img.width = w;
+    img.height = h;
+    const o = img.getContext('2d')!;
+    const outData = o.createImageData(w, h);
+    const od = outData.data;
+    for (let i = 0; i < N; i++) {
+      if (lab[i] !== best) continue;
+      const x = i % w;
+      const y = (i / w) | 0;
+      // borda suave
+      let edge = 0;
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) if (j < 0 || lab[j] !== best) edge++;
+      if (cand[i]) {
+        od[i * 4] = d[i * 4];
+        od[i * 4 + 1] = d[i * 4 + 1];
+        od[i * 4 + 2] = d[i * 4 + 2];
+      } else {
+        od[i * 4] = fr;
+        od[i * 4 + 1] = fg;
+        od[i * 4 + 2] = fb;
+      }
+      od[i * 4 + 3] = edge ? 140 : 255;
+    }
+    o.putImageData(outData, 0, 0);
+    out.push({ img, x: x0, y: y0 });
+
+    // apaga a pinça da fonte da roda (vira o fundo escuro do aro), com margem
+    const hole = sctx.getImageData(x0, y0, w, h);
+    const hd = hole.data;
+    for (let i = 0; i < N; i++) {
+      if (lab[i] !== best) continue;
+      const x = i % w;
+      const y = (i / w) | 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+          const j = yy * w + xx;
+          hd[j * 4] = 12;
+          hd[j * 4 + 1] = 13;
+          hd[j * 4 + 2] = 17;
+        }
+    }
+    sctx.putImageData(hole, x0, y0);
+  }
+  return out;
+}
+
 /**
  * Arte do carro já pintada. `color` igual à cor original (signature) ou null
  * mantém a pintura da imagem.
@@ -151,6 +319,7 @@ export function loadCarArt(model: CarModelId, color: string | null): Promise<HTM
     const meta = CAR_ART[model];
     p = loadImage(meta.src).then((img) => {
       const canvas = repaint(img, meta, color);
+      calipers.set(canvas, extractCalipers(canvas, meta));
       painted.set(key, canvas);
       pending.delete(key);
       return canvas;
@@ -263,11 +432,17 @@ export function drawCarArt(
   const k = width / meta.w;
   ctx.drawImage(art, left, top, width, meta.h * k);
   if (angle === 0 && blur === 0) return;
+  const wheelArt = wheelSources.get(art) ?? art;
   for (const [hx, hy, tx, ty, rx, ry] of meta.wheels) {
     const f = rx / ry;
     // pneu inteiro gira em torno do próprio centro…
-    drawWheelLayer(ctx, art, left, top, k, tx, ty, rx, ry, f, angle, blur, true);
+    drawWheelLayer(ctx, wheelArt, left, top, k, tx, ty, rx, ry, f, angle, blur, true);
     // …e o aro gira por cima, em torno do cubo
-    drawWheelLayer(ctx, art, left, top, k, hx, hy, rx * RIM_RATIO, ry * RIM_RATIO, f, angle, blur, false);
+    drawWheelLayer(ctx, wheelArt, left, top, k, hx, hy, rx * RIM_RATIO, ry * RIM_RATIO, f, angle, blur, false);
+  }
+  // a pinça de freio fica presa à suspensão: não gira
+  for (const c of calipers.get(art) ?? []) {
+    ctx.drawImage(c.img, left + c.x * k, top + c.y * k, c.img.width * k, c.img.height * k);
   }
 }
+
