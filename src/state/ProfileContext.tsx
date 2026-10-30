@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { User } from '@supabase/supabase-js';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { CarModelId, DifficultyId, RaceResult } from '../types';
 import { loadJSON, saveJSON } from '../lib/storage';
 import { audio } from '../lib/audio';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/firebase';
 import { CAR_MODELS } from '../data/cars';
 
 export interface Profile {
@@ -64,10 +64,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [profile.volume, profile.sfx, profile.engineSound]);
 
   useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
-    return () => data.subscription.unsubscribe();
+    if (!auth) return;
+    return onAuthStateChanged(auth, setUser);
   }, []);
 
   const update = useCallback((patch: Partial<Profile>) => setProfile((p) => ({ ...p, ...patch })), []);

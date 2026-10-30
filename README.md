@@ -38,7 +38,7 @@ src/
   screens/           Menu, Corrida, Resultado, Garagem, Ranking
   components/        UI reutilizável (botões, HUD, velocímetro, carro em SVG...)
   data/              textos, carros, cores, pistas, dificuldades
-  lib/               áudio (Web Audio sintetizado), Supabase, ranking, armazenamento
+  lib/               áudio (Web Audio sintetizado), Firebase, ranking, armazenamento
   state/             perfil do jogador (persistido em localStorage)
 ```
 
@@ -56,12 +56,14 @@ A arte dos carros são imagens com fundo transparente em `public/cars/`. Para ad
 
 Sem configuração, o jogo funciona offline: perfil e ranking ficam no `localStorage`.
 
-Para ativar o ranking global e o login por e-mail com Supabase:
+Para ativar o ranking global e o login com Google usando Firebase:
 
-1. Crie um projeto no Supabase e rode `supabase/schema.sql` no SQL Editor.
-2. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
-3. Reinicie o `npm run dev`.
+1. Crie um projeto no [Console do Firebase](https://console.firebase.google.com) e registre um app web.
+2. Crie um banco **Firestore** e cole o conteúdo de `firestore.rules` na aba **Regras**.
+3. (Opcional) Em **Authentication > Método de login**, ative o **Google**.
+4. Copie `.env.example` para `.env` e preencha com os valores do `firebaseConfig`.
+5. Reinicie o `npm run dev`.
 
 ## Tecnologias
 
-React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Canvas 2D, Web Audio API, Supabase.
+React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Canvas 2D, Web Audio API, Firebase.

@@ -4,7 +4,8 @@ import { useProfile } from '../state/ProfileContext';
 import { IconVolume } from './Icons';
 import { GameButton } from './GameButton';
 import { audio } from '../lib/audio';
-import { supabase } from '../lib/supabase';
+import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
 interface Props {
   open: boolean;
@@ -35,7 +36,6 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 export function SettingsModal({ open, onClose }: Props) {
   const { profile, update, user } = useProfile();
   const [nick, setNick] = useState(profile.nickname);
-  const [email, setEmail] = useState('');
   const [authMsg, setAuthMsg] = useState<string | null>(null);
 
   const saveNick = () => {
@@ -44,11 +44,21 @@ export function SettingsModal({ open, onClose }: Props) {
     setNick(clean || profile.nickname);
   };
 
-  const sendMagicLink = async () => {
-    if (!supabase || !email.includes('@')) return;
-    setAuthMsg('Enviando...');
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-    setAuthMsg(error ? `Erro: ${error.message}` : 'Link de acesso enviado! Verifique seu e-mail.');
+  const signInGoogle = async () => {
+    if (!auth) return;
+    setAuthMsg(null);
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? '';
+      setAuthMsg(
+        code === 'auth/operation-not-allowed'
+          ? 'Ative o login com Google no console do Firebase (Authentication > Método de login).'
+          : code === 'auth/popup-closed-by-user'
+            ? null
+            : `Não foi possível entrar: ${code || (e as Error).message}`,
+      );
+    }
   };
 
   return (
@@ -119,33 +129,25 @@ export function SettingsModal({ open, onClose }: Props) {
 
             <section className="mt-6">
               <p className="hud-label mb-2">Conta online</p>
-              {!supabase ? (
+              {!auth ? (
                 <p className="text-sm text-white/50">
-                  Modo offline: seu progresso e ranking ficam salvos neste navegador. Configure o Supabase no arquivo
+                  Modo offline: seu progresso e ranking ficam salvos neste navegador. Configure o Firebase no arquivo
                   <code className="mx-1 rounded bg-white/10 px-1">.env</code> para ativar ranking global.
                 </p>
               ) : user ? (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm text-white/70">{user.email}</span>
-                  <GameButton size="md" variant="ghost" onClick={() => supabase?.auth.signOut()}>
+                  <span className="truncate text-sm text-white/70">{user.displayName ?? user.email}</span>
+                  <GameButton size="md" variant="ghost" onClick={() => auth && signOut(auth)}>
                     Sair
                   </GameButton>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="seu@email.com"
-                      className="w-full rounded-md border border-white/15 bg-asphalt-950 px-3 py-2 font-hud outline-none focus:border-volt"
-                    />
-                    <GameButton size="md" variant="secondary" onClick={sendMagicLink}>
-                      Entrar
-                    </GameButton>
-                  </div>
-                  {authMsg && <p className="text-sm text-volt">{authMsg}</p>}
+                  <p className="text-sm text-white/50">Suas corridas já entram no ranking global. Entre para vincular as pontuações à sua conta.</p>
+                  <GameButton size="md" variant="secondary" onClick={signInGoogle}>
+                    Entrar com Google
+                  </GameButton>
+                  {authMsg && <p className="text-sm text-amber-300">{authMsg}</p>}
                 </div>
               )}
             </section>

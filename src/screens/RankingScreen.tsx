@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { HeroBackground } from '../components/HeroBackground';
 import { fetchScores } from '../lib/leaderboard';
-import { isOnline } from '../lib/supabase';
+import { isOnline } from '../lib/firebase';
 import { DIFFICULTIES, getDifficulty } from '../data/difficulties';
 import { getCarModel } from '../data/cars';
 import { useProfile } from '../state/ProfileContext';
@@ -57,7 +57,7 @@ export function RankingScreen() {
                   className={`skew-panel px-4 py-1.5 font-display text-[11px] font-bold uppercase tracking-[0.18em] disabled:opacity-30 ${
                     scope === sc ? 'bg-blaze text-white' : 'bg-white/5 text-white/60 hover:text-white'
                   }`}
-                  title={sc === 'global' && !isOnline ? 'Configure o Supabase para ativar o ranking global' : undefined}
+                  title={sc === 'global' && !isOnline ? 'Configure o Firebase para ativar o ranking global' : undefined}
                 >
                   {sc === 'global' ? 'Global' : 'Neste dispositivo'}
                 </button>
@@ -147,8 +147,8 @@ export function RankingScreen() {
             </div>
             {!isOnline && (
               <p className="font-hud text-sm text-white/40">
-                Ranking global desativado. Defina <code className="text-white/60">VITE_SUPABASE_URL</code> e{' '}
-                <code className="text-white/60">VITE_SUPABASE_ANON_KEY</code> para competir online.
+                Ranking global desativado. Preencha as variáveis <code className="text-white/60">VITE_FIREBASE_*</code> no{' '}
+                <code className="text-white/60">.env</code> para competir online.
               </p>
             )}
           </div>
