@@ -38,7 +38,7 @@ export interface RaceConfig {
 export interface RaceEvents {
   onCountdownTick?: (n: number) => void;
   onGo?: () => void;
-  onKey?: (correct: boolean) => void;
+  onKey?: (correct: boolean, char: string) => void;
   onWord?: (streak: number) => void;
   onOvertake?: (gained: boolean) => void;
   onFinish?: (result: RaceResult) => void;
@@ -184,7 +184,7 @@ export class RaceController {
   handleInput(value: string): InputResult | null {
     if (!this.canType) return null;
     const res = this.typing.setInput(value);
-    if (res.correct > 0 || res.wrong > 0) this.events.onKey?.(res.wrong === 0);
+    if (res.correct > 0 || res.wrong > 0) this.events.onKey?.(res.wrong === 0, value.slice(-1));
     if (res.committedWord) this.events.onWord?.(this.typing.streak);
     this.player.progress = this.typing.progress;
     if (res.finished && this.player.finishTimeMs === null) {

@@ -147,7 +147,7 @@ export function LessonPlayer({ index, onExit, onNext }: Props) {
     if (el.value !== res.inputValue) el.value = res.inputValue;
     setDeadStage(0);
     if (res.wrong > 0) audio.error();
-    else if (res.correct > 0) audio.key();
+    else if (res.correct > 0) audio.key(el.value.slice(-1) || ' ');
     if (res.committedWord && !res.finished) audio.word();
     setTick((t) => t + 1);
     if (res.finished) finishExercise();

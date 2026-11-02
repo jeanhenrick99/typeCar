@@ -89,8 +89,8 @@ export function RaceScreen({ onExit, onRestart }: Props) {
           inputRef.current?.focus();
           setTimeout(() => setCount(null), 800);
         },
-        onKey: (ok: boolean) => {
-          if (ok) audio.key();
+        onKey: (ok: boolean, char: string) => {
+          if (ok) audio.key(char);
           else {
             audio.error();
             rendererRef.current?.bump(3);

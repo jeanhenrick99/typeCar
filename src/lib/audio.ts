@@ -1,4 +1,5 @@
 import { ENGINES, EngineSound } from './engineSound';
+import { playMagneticKey } from './keySound';
 import type { CarModelId } from '../types';
 
 /**
@@ -66,26 +67,11 @@ class AudioEngine {
     o.stop(t + dur + 0.05);
   }
 
-  private noise(dur: number, gain: number, freq = 2000) {
+  /** Toque de tecla com som de switch magnético; `char` deixa o espaço mais grave */
+  key(char?: string) {
     const ctx = this.ensure();
     if (!ctx || !this.master || !this.enabled) return;
-    const len = Math.floor(ctx.sampleRate * dur);
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass';
-    f.frequency.value = freq;
-    const g = ctx.createGain();
-    g.gain.value = gain;
-    src.connect(f).connect(g).connect(this.master);
-    src.start();
-  }
-
-  key() {
-    this.noise(0.03, 0.25, 3200 + Math.random() * 800);
+    playMagneticKey(ctx, this.master, char);
   }
 
   error() {
