@@ -17,7 +17,7 @@ Abra http://localhost:5173. Para gerar a versão de produção: `npm run build`.
 - No menu, escolha o nível dos rivais e a duração média da corrida (30s, 1, 2 ou 3 min). O tamanho do texto é calculado pelo ritmo do rival mais rápido do nível escolhido.
 - Digite o texto destacado. Letras corretas ficam verdes, a atual fica em destaque, erros ficam vermelhos.
 - Um erro trava o carro até ser apagado com Backspace.
-- 5 palavras seguidas sem erro ativam o **nitro**.
+- Digitando sem errar você enche a barra de **nitro** (cerca de 5 palavras). Cheia, ela dispara sozinha e o nitro fica ligado até você errar: enquanto isso, cada letra certa vale 1,5× na pista. Um erro corta o nitro e zera a barra.
 - A corrida termina quando você ou um rival cruza a linha de chegada.
 - 4 pistas com cenário e clima próprios: Neon City (noite chuvosa), Sunset Coast (pôr do sol no mar), Solar Desert (deserto com poeira) e Arctic Ring (neve e aurora boreal). Escolha na Garagem.
 - **Esc** sai da corrida, **Enter** na tela de resultado corre de novo.

@@ -188,7 +188,7 @@ export function MenuScreen({ onPlay, onGarage }: Props) {
       <div className="relative z-10 mx-auto hidden max-w-7xl grid-cols-3 gap-4 px-6 pb-16 lg:grid">
         {[
           { n: '01', t: 'Digite', d: 'Cada letra correta empurra seu carro para frente.' },
-          { n: '02', t: 'Acelere', d: 'Quanto maior seu PPM, maior sua velocidade. 5 palavras perfeitas ativam o nitro.' },
+          { n: '02', t: 'Acelere', d: 'Quanto maior seu PPM, maior sua velocidade. Digite sem errar para encher o nitro.' },
           { n: '03', t: 'Vença', d: 'Erros travam o carro até serem corrigidos. Precisão é velocidade.' },
         ].map((s) => (
           <div key={s.n} className="glass cut-corner flex gap-4 p-5">

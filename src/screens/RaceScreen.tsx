@@ -49,6 +49,8 @@ export function RaceScreen({ onExit, onRestart }: Props) {
     speed: 0,
     streak: 0,
     errors: 0,
+    nitro: 0,
+    nitroActive: false,
     progress: 0,
     metersLeft: 0,
     board: [],
@@ -99,8 +101,14 @@ export function RaceScreen({ onExit, onRestart }: Props) {
         onWord: (streak: number) => {
           if (streak > 0 && streak % 5 === 0) {
             audio.streak();
-            showToast(`COMBO x${streak} · NITRO!`, true);
+            showToast(`COMBO x${streak}`, true);
           } else audio.word();
+        },
+        onNitro: (on: boolean) => {
+          if (!on) return;
+          audio.nitro();
+          rendererRef.current?.nitroBurst();
+          showToast('NITRO!', true);
         },
         onOvertake: (gained: boolean) => {
           audio.overtake(gained);
@@ -178,6 +186,8 @@ export function RaceScreen({ onExit, onRestart }: Props) {
           speed: race.player.speed,
           streak: race.typing.streak,
           errors: race.typing.errors,
+          nitro: race.nitroLevel,
+          nitroActive: race.nitroActive,
         });
       }
       raf = requestAnimationFrame(loop);
@@ -225,7 +235,7 @@ export function RaceScreen({ onExit, onRestart }: Props) {
   const caretIndex = typing.finished
     ? typing.totalChars
     : typing.targetOffsets[typing.wordIndex] + Math.min(typing.input.length, typing.currentTarget.length);
-  const nitro = hud.streak >= 5 && hud.speed > 60;
+  const nitro = hud.nitroActive;
   const diff = getDifficulty(profile.difficulty);
 
   return (

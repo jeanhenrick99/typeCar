@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { IconBack, IconRestart, IconVolume } from '../Icons';
+import { IconBack, IconBolt, IconRestart, IconVolume } from '../Icons';
 
 export interface BoardRow {
   id: string;
@@ -20,6 +20,9 @@ export interface HudData {
   speed: number;
   streak: number;
   errors: number;
+  /** Barra do nitro (0..1): carga enchendo, cheia enquanto ativo */
+  nitro: number;
+  nitroActive: boolean;
   progress: number;
   metersLeft: number;
   board: BoardRow[];
@@ -174,14 +177,40 @@ export function RaceHud({ hud, totalRacers, trackName, trackColor, difficultyNam
             </div>
           </div>
 
+          {/* barra de nitro: enche digitando sem errar e dispara sozinha */}
+          <div className="w-32 sm:w-44">
+            <div className="mb-0.5 flex items-center justify-end gap-1">
+              <IconBolt className={`h-3 w-3 ${hud.nitroActive ? 'text-volt' : 'text-white/45'}`} />
+              <span
+                className={`font-display text-[9px] font-bold tracking-[0.25em] ${
+                  hud.nitroActive ? 'text-volt text-glow-volt animate-pulseGlow' : 'text-white/55'
+                }`}
+              >
+                {hud.nitroActive ? 'NITRO ATIVO' : 'NITRO'}
+              </span>
+            </div>
+            <div
+              className={`relative h-2.5 skew-x-[-14deg] overflow-hidden bg-black/60 ring-1 ${
+                hud.nitroActive ? 'ring-volt/80 shadow-[0_0_14px_rgba(0,212,255,0.7)]' : 'ring-white/15'
+              }`}
+            >
+              <div
+                className={`h-full transition-[width] duration-100 ease-linear ${hud.nitroActive ? 'animate-pulseGlow' : ''}`}
+                style={{
+                  width: `${Math.min(100, hud.nitro * 100)}%`,
+                  background: hud.nitroActive ? 'linear-gradient(90deg,#00a6d6,#9ff6ff)' : 'linear-gradient(90deg,#ff6a00,#00d4ff)',
+                }}
+              />
+              <div className="absolute inset-0 bg-[repeating-linear-gradient(90deg,transparent_0_calc(20%-1px),rgba(0,0,0,0.55)_calc(20%-1px)_20%)]" />
+            </div>
+          </div>
+
           {hud.streak >= 2 && (
             <motion.div
               key={hud.streak}
               initial={{ scale: 1.3, opacity: 0.6 }}
               animate={{ scale: 1, opacity: 1 }}
-              className={`skew-panel px-3 py-0.5 font-display text-[10px] font-bold tracking-[0.2em] sm:text-xs ${
-                hud.streak >= 5 ? 'bg-volt text-asphalt-950 shadow-[0_0_16px_rgba(0,212,255,0.6)]' : 'bg-black/55 text-white/80'
-              }`}
+              className="skew-panel bg-black/55 px-3 py-0.5 font-display text-[10px] font-bold tracking-[0.2em] text-white/80 sm:text-xs"
             >
               COMBO x{hud.streak}
             </motion.div>

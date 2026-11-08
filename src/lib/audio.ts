@@ -74,6 +74,34 @@ class AudioEngine {
     playMagneticKey(ctx, this.master, char);
   }
 
+  /** Disparo do nitro: impacto grave + jato de ar subindo + assobio de turbo */
+  nitro() {
+    const ctx = this.ensure();
+    if (!ctx || !this.master || !this.enabled) return;
+    const t = ctx.currentTime;
+    this.tone(70, 0.35, 'sine', 0.22, 0, 45);
+    // jato: ruído com filtro varrendo do grave ao agudo
+    const len = Math.floor(ctx.sampleRate * 0.7);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 0.9;
+    bp.frequency.setValueAtTime(350, t);
+    bp.frequency.exponentialRampToValueAtTime(4200, t + 0.55);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.28, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    src.connect(bp).connect(g).connect(this.master);
+    src.start(t);
+    src.stop(t + 0.72);
+    this.tone(900, 0.6, 'sine', 0.05, 0.05, 2600);
+  }
+
   error() {
     this.tone(150, 0.12, 'square', 0.12, 0, 90);
   }

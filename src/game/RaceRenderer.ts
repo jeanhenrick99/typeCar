@@ -120,6 +120,15 @@ export class RaceRenderer {
     this.shake = Math.max(this.shake, amount);
   }
 
+  /** Disparo do nitro: tranco e explosão azul no escapamento */
+  nitroBurst() {
+    const r = this.race.player;
+    const x = this.carWorldX(r) - this.layout.carLen * 0.55;
+    const y = this.laneGround(r.lane) - this.layout.carLen * 0.1;
+    for (let i = 0; i < 18; i++) this.spawn(x, y + (Math.random() - 0.5) * 10, 'rgba(0,212,255,', 0.7, 3);
+    this.shake = Math.max(this.shake, 6);
+  }
+
   private buildNoise(): CanvasPattern | null {
     const c = document.createElement('canvas');
     c.width = c.height = 128;
@@ -204,7 +213,8 @@ export class RaceRenderer {
     const camDx = this.camX - prevCam;
     this.shake *= 1 - Math.min(1, dt * 8);
     const speedK = Math.min(1, player.speed / 300);
-    const vib = (this.shake + speedK * 0.8) * (Math.random() - 0.5);
+    const nitro = race.nitroActive && race.phase === 'racing';
+    const vib = (this.shake + speedK * 0.8 + (nitro ? 1.2 : 0)) * (Math.random() - 0.5);
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.save();
@@ -221,7 +231,7 @@ export class RaceRenderer {
     drawTrackDetails(this.scene());
     this.drawStartFinish();
     this.drawStartLights();
-    this.drawSpeedLines(speedK);
+    this.drawSpeedLines(nitro ? 1 : speedK, nitro);
 
     // Partículas atrás dos carros
     this.updateParticles(dt);
@@ -236,7 +246,7 @@ export class RaceRenderer {
     this.weather.draw(ctx, L.w, L.h, dt, camDx, this.time);
 
     this.drawIndicators();
-    this.drawVignette(speedK);
+    this.drawVignette(speedK, nitro);
   }
 
   private drawSky() {
@@ -564,12 +574,12 @@ export class RaceRenderer {
     }
   }
 
-  private drawSpeedLines(k: number) {
+  private drawSpeedLines(k: number, nitro = false) {
     if (k < 0.15) return;
     const { ctx, layout: L } = this;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const n = Math.floor(14 * k);
+    const n = Math.floor((nitro ? 34 : 14) * k);
     for (let i = 0; i < n; i++) {
       const seed = Math.floor(this.time * 18) + i * 31;
       const y = L.trackTop + hash(seed) * (L.trackBottom - L.trackTop);
@@ -577,9 +587,9 @@ export class RaceRenderer {
       const x = hash(seed + 2) * L.w;
       const g = ctx.createLinearGradient(x, 0, x + len, 0);
       g.addColorStop(0, 'rgba(255,255,255,0)');
-      g.addColorStop(1, `rgba(200,240,255,${0.1 + 0.15 * k})`);
+      g.addColorStop(1, nitro ? `rgba(90,220,255,${0.35 + 0.2 * hash(seed + 3)})` : `rgba(200,240,255,${0.1 + 0.15 * k})`);
       ctx.fillStyle = g;
-      ctx.fillRect(x, y, len, 1.2);
+      ctx.fillRect(x, y, nitro ? len * 1.6 : len, nitro ? 1.8 : 1.2);
     }
     ctx.restore();
   }
@@ -600,7 +610,7 @@ export class RaceRenderer {
     const ground = this.laneGround(r.lane);
     const left = x - len / 2;
     const top = ground - carH * groundRatio(r.car) + bounce;
-    const nitro = r.isPlayer && this.race.typing.streak >= 5 && r.speed > 60 && this.race.phase === 'racing';
+    const nitro = r.isPlayer && this.race.nitroActive && this.race.phase === 'racing';
     const exhaustY = top + carH * 0.72;
 
     // partículas de escapamento
@@ -812,7 +822,7 @@ export class RaceRenderer {
     }
   }
 
-  private drawVignette(k: number) {
+  private drawVignette(k: number, nitro = false) {
     const { ctx, layout: L } = this;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     const g = ctx.createRadialGradient(L.w / 2, L.h / 2, Math.min(L.w, L.h) * 0.3, L.w / 2, L.h / 2, Math.max(L.w, L.h) * 0.75);
@@ -820,5 +830,17 @@ export class RaceRenderer {
     g.addColorStop(1, `rgba(0,0,0,${0.45 + k * 0.2})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, L.w, L.h);
+    if (nitro) {
+      // bordas da tela brilham em azul durante o nitro
+      const pulse = 0.18 + 0.08 * Math.sin(this.time * 18);
+      const ng = ctx.createRadialGradient(L.w / 2, L.h / 2, Math.min(L.w, L.h) * 0.45, L.w / 2, L.h / 2, Math.max(L.w, L.h) * 0.75);
+      ng.addColorStop(0, 'rgba(0,212,255,0)');
+      ng.addColorStop(1, `rgba(0,212,255,${pulse})`);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = ng;
+      ctx.fillRect(0, 0, L.w, L.h);
+      ctx.restore();
+    }
   }
 }

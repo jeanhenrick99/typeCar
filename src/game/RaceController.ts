@@ -41,6 +41,8 @@ export interface RaceEvents {
   onKey?: (correct: boolean, char: string) => void;
   onWord?: (streak: number) => void;
   onOvertake?: (gained: boolean) => void;
+  /** Nitro ligou (true) ou acabou/foi cortado por erro (false) */
+  onNitro?: (on: boolean) => void;
   onFinish?: (result: RaceResult) => void;
 }
 
@@ -56,6 +58,10 @@ function colorDistance(a: string, b: string): number {
 }
 
 const COUNTDOWN_SECONDS = 3;
+/** Letras certas seguidas para encher o nitro (≈ 5 palavras) */
+const NITRO_CHARS = 25;
+/** Durante o nitro, cada letra certa vale isto na pista */
+const NITRO_MULT = 1.5;
 const SPEED_WINDOW_MS = 2500;
 /** km/h por PPM — 100 PPM ≈ 300 km/h */
 const KMH_PER_WPM = 3;
@@ -73,6 +79,13 @@ export class RaceController {
   /** Momento em que a corrida terminou (ms desde o GO) */
   endMs: number | null = null;
   result: RaceResult | null = null;
+  /** Carga do nitro (0..1); enche digitando sem errar */
+  nitroCharge = 0;
+  /** Nitro ligado: dura até o próximo erro */
+  nitroOn = false;
+  nitroCount = 0;
+  /** Distância extra ganha com nitro, em letras */
+  private bonusChars = 0;
   /** Tempo de exibição do "GO" após a largada */
   goFlash = 0;
 
@@ -145,6 +158,15 @@ export class RaceController {
     return Math.round((this.typing.totalChars * 8) / 100) * 100;
   }
 
+  get nitroActive(): boolean {
+    return this.nitroOn;
+  }
+
+  /** Nível da barra do HUD: carga enchendo, ou cheia enquanto o nitro está ligado */
+  get nitroLevel(): number {
+    return this.nitroOn ? 1 : this.nitroCharge;
+  }
+
   get canType(): boolean {
     return this.phase === 'racing';
   }
@@ -186,8 +208,32 @@ export class RaceController {
     const res = this.typing.setInput(value);
     if (res.correct > 0 || res.wrong > 0) this.events.onKey?.(res.wrong === 0, value.slice(-1));
     if (res.committedWord) this.events.onWord?.(this.typing.streak);
-    this.player.progress = this.typing.progress;
-    if (res.finished && this.player.finishTimeMs === null) {
+
+    if (res.wrong > 0) {
+      // errou: zera a carga e corta o nitro
+      this.nitroCharge = 0;
+      if (this.nitroOn) {
+        this.nitroOn = false;
+        this.events.onNitro?.(false);
+      }
+    } else if (res.correct > 0) {
+      if (this.nitroActive) {
+        this.bonusChars += res.correct * (NITRO_MULT - 1);
+      } else {
+        this.nitroCharge = Math.min(1, this.nitroCharge + res.correct / NITRO_CHARS);
+        if (this.nitroCharge >= 1) {
+          this.nitroCharge = 0;
+          this.nitroOn = true;
+          this.nitroCount++;
+          this.events.onNitro?.(true);
+        }
+      }
+    }
+
+    // posição na pista = letras certas + distância extra do nitro
+    const total = this.typing.totalChars;
+    this.player.progress = Math.min(1, (this.typing.progressChars + this.bonusChars) / total);
+    if ((res.finished || this.player.progress >= 1) && this.player.finishTimeMs === null) {
       this.player.progress = 1;
       this.player.finishTimeMs = this.elapsedMs;
       this.endRace();
@@ -267,7 +313,8 @@ export class RaceController {
   }
 
   private updateVisuals(dt: number) {
-    const target = Math.min(400, this.instantWpm * KMH_PER_WPM);
+    const boost = this.nitroActive ? NITRO_MULT : 1;
+    const target = Math.min(this.nitroActive ? 520 : 400, this.instantWpm * KMH_PER_WPM * boost);
     const rate = target > this.player.speed ? 3 : 1.6;
     this.player.speed += (target - this.player.speed) * Math.min(1, dt * rate);
     if (this.phase !== 'racing') this.player.speed *= 1 - Math.min(1, dt * 1.5);
