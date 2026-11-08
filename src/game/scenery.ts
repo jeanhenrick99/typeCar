@@ -270,40 +270,56 @@ function drawDesertBackdrop(s: Scene) {
 
 // ───────────────────────── Arctic Ring ─────────────────────────
 
-let auroraGrad: { key: string; g: CanvasGradient[] } | null = null;
+
+/** Aurora desenhada numa camada de baixa resolução (é só brilho borrado) e ampliada */
+let auroraLayer: { c: HTMLCanvasElement; key: string; g: CanvasGradient[] } | null = null;
+const AURORA_SCALE = 0.35;
 
 function drawAurora(s: Scene) {
   const { ctx, w, skyH, time, theme } = s;
   const maxH = skyH * 0.5;
-  const key = `${maxH}|${theme.neon}|${theme.neon2}`;
-  if (!auroraGrad || auroraGrad.key !== key) {
+  const W = Math.max(1, Math.ceil(w * AURORA_SCALE));
+  const H = Math.max(1, Math.ceil(skyH * AURORA_SCALE));
+  const key = `${W}|${H}|${theme.neon}|${theme.neon2}`;
+  if (!auroraLayer || auroraLayer.key !== key) {
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const x = c.getContext('2d')!;
     const mk = (a: string, b: string) => {
-      const g = ctx.createLinearGradient(0, 0, 0, maxH);
+      const g = x.createLinearGradient(0, 0, 0, maxH);
       g.addColorStop(0, withAlpha(b, 0));
       g.addColorStop(0.6, withAlpha(b, 0.2));
       g.addColorStop(0.92, withAlpha(a, 0.6));
       g.addColorStop(1, withAlpha(a, 0));
       return g;
     };
-    auroraGrad = { key, g: [mk(theme.neon, theme.neon2), mk(theme.neon2, theme.neon), mk(theme.neon, '#ffffff')] };
+    auroraLayer = { c, key, g: [mk(theme.neon, theme.neon2), mk(theme.neon2, theme.neon), mk(theme.neon, '#ffffff')] };
   }
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
+  const a = auroraLayer.c.getContext('2d')!;
+  a.setTransform(1, 0, 0, 1, 0, 0);
+  a.globalCompositeOperation = 'source-over';
+  a.clearRect(0, 0, W, H);
+  a.globalCompositeOperation = 'lighter';
+  a.scale(AURORA_SCALE, AURORA_SCALE);
   const off = s.camX * 0.02;
   for (let b = 0; b < 3; b++) {
-    ctx.fillStyle = auroraGrad.g[b];
-    for (let x = 0; x < w; x += 5) {
+    a.fillStyle = auroraLayer.g[b];
+    for (let x = 0; x < w; x += 6) {
       const wx = x + off;
       const base =
         skyH * (0.32 + b * 0.07) +
         Math.sin(wx * 0.006 + time * 0.5 + b * 2) * skyH * 0.08 +
         Math.sin(wx * 0.017 - time * 0.8 + b) * skyH * 0.03;
       const hgt = maxH * (0.55 + 0.45 * Math.sin(wx * 0.011 + time * 0.7 + b * 1.3));
-      ctx.translate(x, base - maxH);
-      ctx.fillRect(0, maxH - hgt, 5, hgt);
-      ctx.translate(-x, -(base - maxH));
+      a.translate(x, base - maxH);
+      a.fillRect(0, maxH - hgt, 6, hgt);
+      a.translate(-x, -(base - maxH));
     }
   }
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(auroraLayer.c, 0, 0, w, skyH);
   ctx.restore();
 }
 
@@ -619,7 +635,8 @@ export class Weather {
 
   draw(ctx: CanvasRenderingContext2D, w: number, h: number, dt: number, camDx: number, time: number) {
     if (this.kind === 'none') return;
-    ctx.save();
+    // gotas agrupadas em 3 camadas de profundidade: um traço/preenchimento por camada
+    const groups: Drop[][] = [[], [], []];
     for (const d of this.drops) {
       // movimento em pixels convertido para fração da tela
       let vx = 0;
@@ -643,26 +660,39 @@ export class Weather {
         d.x = Math.random();
       }
       if (d.y < -0.02) d.y += 1.04;
-
-      const x = d.x * w;
-      const y = d.y * h;
+      groups[Math.min(2, Math.floor(((d.z - 0.3) / 0.7) * 3))].push(d);
+    }
+    ctx.save();
+    groups.forEach((list, gi) => {
+      if (!list.length) return;
+      const z = 0.3 + ((gi + 0.5) / 3) * 0.7;
       if (this.kind === 'rain') {
-        ctx.strokeStyle = `rgba(170,200,255,${0.15 + d.z * 0.25})`;
-        ctx.lineWidth = d.z;
+        ctx.strokeStyle = `rgba(170,200,255,${0.15 + z * 0.25})`;
+        ctx.lineWidth = z;
         ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - 3 * d.z, y + 16 * d.z);
+        for (const d of list) {
+          const x = d.x * w;
+          const y = d.y * h;
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - 3 * d.z, y + 16 * d.z);
+        }
         ctx.stroke();
       } else if (this.kind === 'snow') {
-        ctx.fillStyle = `rgba(255,255,255,${0.4 + d.z * 0.5})`;
+        ctx.fillStyle = `rgba(255,255,255,${0.4 + z * 0.5})`;
         ctx.beginPath();
-        ctx.arc(x, y, 0.8 + d.z * 2, 0, Math.PI * 2);
+        for (const d of list) {
+          const x = d.x * w;
+          const y = d.y * h;
+          const r = 0.8 + d.z * 2;
+          ctx.moveTo(x + r, y);
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+        }
         ctx.fill();
       } else {
-        ctx.fillStyle = `rgba(230,190,130,${0.15 + d.z * 0.3})`;
-        ctx.fillRect(x, y, 2 + d.z * 6, 1 + d.z);
+        ctx.fillStyle = `rgba(230,190,130,${0.15 + z * 0.3})`;
+        for (const d of list) ctx.fillRect(d.x * w, d.y * h, 2 + d.z * 6, 1 + d.z);
       }
-    }
+    });
     ctx.restore();
   }
 }

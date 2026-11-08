@@ -44,6 +44,51 @@ const LANES = 4;
 const LANE_DEPTH = [0.82, 0.94, 1.06, 1.18];
 
 
+/**
+ * Cenário que rola de lado desenhado em pedaços prontos: cada pedaço é
+ * pintado uma vez num canvas próprio e depois só copiado a cada quadro.
+ * `frame` permite poucas variações animadas (ex.: torcida pulando).
+ */
+class ChunkCache {
+  private map = new Map<string, HTMLCanvasElement>();
+
+  constructor(
+    readonly w: number,
+    readonly h: number,
+    /** largura extra do canvas para desenhos que passam da borda do pedaço */
+    private extra: number,
+    private dpr: number,
+    private paint: (ctx: CanvasRenderingContext2D, index: number, frame: number) => void,
+    private max = 40,
+  ) {}
+
+  private get(index: number, frame: number): HTMLCanvasElement {
+    const key = `${index}:${frame}`;
+    const hit = this.map.get(key);
+    if (hit) {
+      this.map.delete(key);
+      this.map.set(key, hit);
+      return hit;
+    }
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.ceil((this.w + this.extra) * this.dpr));
+    c.height = Math.max(1, Math.ceil(this.h * this.dpr));
+    const x = c.getContext('2d')!;
+    x.scale(this.dpr, this.dpr);
+    this.paint(x, index, frame);
+    this.map.set(key, c);
+    if (this.map.size > this.max) this.map.delete(this.map.keys().next().value as string);
+    return c;
+  }
+
+  draw(ctx: CanvasRenderingContext2D, offset: number, top: number, viewW: number, frame = 0) {
+    const first = Math.floor(offset / this.w) - (this.extra > 0 ? 1 : 0);
+    for (let i = first; i * this.w - offset < viewW; i++) {
+      ctx.drawImage(this.get(i, frame), i * this.w - offset, top, this.w + this.extra, this.h);
+    }
+  }
+}
+
 /** Hash determinístico simples para gerar cenário procedural estável */
 function hash(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -71,6 +116,14 @@ export class RaceRenderer {
   private wheelAngle = new Map<string, number>();
   private weather: Weather;
   private look: PlayerLook;
+  private skylineCache: ChunkCache | null = null;
+  private crowdCache: ChunkCache | null = null;
+  private boardCache = new Map<string, HTMLCanvasElement>();
+  private vignette: HTMLCanvasElement | null = null;
+  /** Resolução de desenho: cai sozinha se o computador não acompanhar */
+  private renderScale = 1;
+  private slowTime = 0;
+  private frameAvg = 16.7;
 
   constructor(canvas: HTMLCanvasElement, race: RaceController, theme: TrackTheme, look: PlayerLook = { rim: null, neon: null, smoke: '#00d4ff' }) {
     this.look = look;
@@ -87,7 +140,7 @@ export class RaceRenderer {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2) * this.renderScale;
     this.canvas.width = Math.max(1, Math.round(rect.width * this.dpr));
     this.canvas.height = Math.max(1, Math.round(rect.height * this.dpr));
     const w = rect.width;
@@ -115,6 +168,90 @@ export class RaceRenderer {
     };
     this.noise = this.buildNoise();
     this.camX = this.carWorldX(this.race.player) - w * 0.3;
+    this.buildCaches();
+  }
+
+  /** Recria os desenhos prontos (cenário, painéis, vinheta) para o tamanho atual */
+  private buildCaches() {
+    const L = this.layout;
+    const theme = this.theme;
+    const dpr = this.dpr;
+    this.boardCache.clear();
+
+    // prédios: 8 por pedaço
+    const bw = 46;
+    this.skylineCache = new ChunkCache(bw * 8, L.skyH, bw * 0.6, dpr, (ctx, index) => {
+      const base = L.skyH;
+      for (let k = 0; k < 8; k++) {
+        const i = index * 8 + k;
+        const x = k * bw;
+        const hgt = (0.25 + hash(i) * 0.55) * L.skyH;
+        const wdt = bw * (0.6 + hash(i + 50) * 0.5);
+        ctx.fillStyle = theme.night ? '#0b0d1c' : 'rgba(40,14,40,0.9)';
+        ctx.fillRect(x, base - hgt, wdt, hgt);
+        if (theme.night) {
+          ctx.fillStyle = withAlpha(hash(i + 9) > 0.5 ? theme.neon : theme.neon2, 0.5);
+          for (let wy = 6; wy < hgt - 6; wy += 7) {
+            for (let wx = 4; wx < wdt - 4; wx += 6) {
+              if (hash(wx * 0.37 + wy * 1.7 + i * 5.3) > 0.72) ctx.fillRect(x + wx, base - hgt + wy, 2, 3);
+            }
+          }
+          if (hash(i + 3) > 0.7) {
+            ctx.fillStyle = withAlpha(theme.neon2, 0.9);
+            ctx.fillRect(x, base - hgt, wdt, 2);
+          }
+        }
+      }
+    });
+
+    // torcida: um setor (40 colunas) por pedaço, 4 quadros de animação
+    const cell = 6;
+    const hgt = L.skyH * 0.32;
+    const rows = Math.floor(hgt / cell) - 1;
+    const colors = [theme.neon, theme.neon2, '#ffffff', '#ff6a00', '#ffd000'];
+    this.crowdCache = new ChunkCache(cell * 40, hgt, 0, dpr, (ctx, index, frame) => {
+      if (hash(index * 13.3) > 0.82) return; // vão entre setores
+      for (let k = 0; k < 40; k++) {
+        const c = index * 40 + k;
+        for (let r = 0; r < rows; r++) {
+          const hv = hash(c * 3.7 + r * 11.1);
+          if (hv < 0.35) continue;
+          const jump = hash(hv * 91.7 + frame * 7.3) > 0.82 ? -1.5 : 0;
+          ctx.fillStyle = withAlpha(colors[Math.floor(hv * colors.length * 7) % colors.length], 0.25 + hv * 0.35);
+          ctx.fillRect(k * cell, 4 + r * cell + jump, 3, 3);
+        }
+      }
+    });
+
+    // vinheta: gradiente pronto, só a opacidade muda
+    const v = document.createElement('canvas');
+    v.width = Math.max(1, Math.round(L.w * dpr * 0.5));
+    v.height = Math.max(1, Math.round(L.h * dpr * 0.5));
+    const vx = v.getContext('2d')!;
+    const g = vx.createRadialGradient(v.width / 2, v.height / 2, Math.min(v.width, v.height) * 0.3, v.width / 2, v.height / 2, Math.max(v.width, v.height) * 0.75);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,1)');
+    vx.fillStyle = g;
+    vx.fillRect(0, 0, v.width, v.height);
+    this.vignette = v;
+  }
+
+  /**
+   * Mede o tempo dos quadros; se o computador não estiver dando conta
+   * (abaixo de ~45 fps por 1,5 s), baixa um pouco a resolução do desenho.
+   */
+  private adaptQuality(dtMs: number) {
+    if (dtMs <= 0 || dtMs > 250) return;
+    this.frameAvg += (dtMs - this.frameAvg) * 0.05;
+    if (this.frameAvg > 22 && this.renderScale > 0.6) {
+      this.slowTime += dtMs;
+      if (this.slowTime > 1500) {
+        this.slowTime = 0;
+        this.frameAvg = 16.7;
+        this.renderScale = Math.max(0.6, this.renderScale - 0.15);
+        this.resize();
+      }
+    } else this.slowTime = 0;
   }
 
   /** Dispara efeito de largada */
@@ -140,10 +277,20 @@ export class RaceRenderer {
     this.shake = Math.max(this.shake, 6);
   }
 
+  /** Tamanho do ladrilho do asfalto em pixels reais da tela */
+  private noiseTile = 128;
+
+  /**
+   * Textura do asfalto já na resolução real da tela: assim ela é copiada
+   * pixel a pixel, sem reamostrar a cada quadro.
+   */
   private buildNoise(): CanvasPattern | null {
+    const size = Math.max(32, Math.round(128 * this.dpr));
+    this.noiseTile = size;
     const c = document.createElement('canvas');
-    c.width = c.height = 128;
+    c.width = c.height = size;
     const x = c.getContext('2d')!;
+    x.scale(size / 128, size / 128);
     x.fillStyle = this.theme.asphalt;
     x.fillRect(0, 0, 128, 128);
     for (let i = 0; i < 900; i++) {
@@ -216,6 +363,7 @@ export class RaceRenderer {
   }
 
   render(dtMs: number) {
+    if (this.race.phase === 'racing') this.adaptQuality(dtMs);
     const dt = Math.min(dtMs, 100) / 1000;
     this.time += dt;
     const ctx = this.ctx;
@@ -285,33 +433,8 @@ export class RaceRenderer {
 
   private drawSkyline() {
     const { ctx, layout: L, theme } = this;
-    const par = 0.12;
-    const offset = this.camX * par;
-    const bw = 46;
-    const first = Math.floor(offset / bw) - 1;
-    const count = Math.ceil(L.w / bw) + 3;
     const base = L.skyH;
-    for (let i = first; i < first + count; i++) {
-      const x = i * bw - offset;
-      const hgt = (0.25 + hash(i) * 0.55) * L.skyH;
-      const wdt = bw * (0.6 + hash(i + 50) * 0.5);
-      ctx.fillStyle = theme.night ? '#0b0d1c' : 'rgba(40,14,40,0.9)';
-      ctx.fillRect(x, base - hgt, wdt, hgt);
-      // janelas
-      if (theme.night) {
-        ctx.fillStyle = withAlpha(hash(i + 9) > 0.5 ? theme.neon : theme.neon2, 0.5);
-        for (let wy = base - hgt + 6; wy < base - 6; wy += 7) {
-          for (let wx = x + 4; wx < x + wdt - 4; wx += 6) {
-            if (hash(wx * 0.37 + wy * 1.7 + i) > 0.72) ctx.fillRect(wx, wy, 2, 3);
-          }
-        }
-        // topo neon
-        if (hash(i + 3) > 0.7) {
-          ctx.fillStyle = withAlpha(theme.neon2, 0.9);
-          ctx.fillRect(x, base - hgt, wdt, 2);
-        }
-      }
-    }
+    this.skylineCache?.draw(ctx, this.camX * 0.12, 0, L.w);
     // névoa no horizonte
     const fog = ctx.createLinearGradient(0, base - L.skyH * 0.4, 0, base);
     fog.addColorStop(0, 'rgba(0,0,0,0)');
@@ -329,24 +452,8 @@ export class RaceRenderer {
     ctx.fillStyle = '#0a0c14';
     ctx.fillRect(0, top, L.w, hgt + 12);
 
-    // torcida
-    const cell = 6;
-    const first = Math.floor(offset / cell);
-    const cols = Math.ceil(L.w / cell) + 2;
-    const rows = Math.floor(hgt / cell) - 1;
-    const colors = [theme.neon, theme.neon2, '#ffffff', '#ff6a00', '#ffd000'];
-    for (let c = first; c < first + cols; c++) {
-      const x = c * cell - offset;
-      const seg = Math.floor(c / 40);
-      if (hash(seg * 13.3) > 0.82) continue; // vãos entre setores
-      for (let r = 0; r < rows; r++) {
-        const hv = hash(c * 3.7 + r * 11.1);
-        if (hv < 0.35) continue;
-        const jump = Math.sin(this.time * 8 + hv * 20) > 0.85 ? -1.5 : 0;
-        ctx.fillStyle = withAlpha(colors[Math.floor(hv * colors.length * 7) % colors.length], 0.25 + hv * 0.35);
-        ctx.fillRect(x, top + 4 + r * cell + jump, 3, 3);
-      }
-    }
+    // torcida (pedaços prontos, alternando 4 quadros de pulos)
+    this.crowdCache?.draw(ctx, offset, top, L.w, Math.floor(this.time * 6) % 4);
 
     // postes de luz
     const poleGap = 320;
@@ -373,6 +480,34 @@ export class RaceRenderer {
     ctx.fillRect(0, L.skyH - 2, L.w, 2);
   }
 
+  /** Fundo (ou grade de pixels) de um painel de LED, desenhado uma vez */
+  private boardLayer(accent: string, bw: number, bh: number, grid: boolean): HTMLCanvasElement {
+    const key = `${accent}|${grid}`;
+    const hit = this.boardCache.get(key);
+    if (hit) return hit;
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(bw * this.dpr);
+    c.height = Math.ceil(bh * this.dpr);
+    const x = c.getContext('2d')!;
+    x.scale(this.dpr, this.dpr);
+    if (grid) {
+      x.fillStyle = 'rgba(0,0,0,0.25)';
+      for (let py = 2; py < bh; py += 3) x.fillRect(0, py, bw, 1);
+      x.fillStyle = withAlpha(accent, 0.9);
+      x.fillRect(0, 0, bw, 1);
+    } else {
+      x.fillStyle = '#05060c';
+      x.fillRect(0, 0, bw, bh);
+      const g = x.createLinearGradient(0, 0, 0, bh);
+      g.addColorStop(0, withAlpha(accent, 0.28));
+      g.addColorStop(1, withAlpha(accent, 0.06));
+      x.fillStyle = g;
+      x.fillRect(0, 0, bw, bh);
+    }
+    this.boardCache.set(key, c);
+    return c;
+  }
+
   /** Painéis de LED publicitários presos ao muro da pista */
   private drawAdBoards() {
     const { ctx, layout: L, theme } = this;
@@ -390,23 +525,13 @@ export class RaceRenderer {
       const x = i * period - this.camX;
       const idx = ((i % msgs.length) + msgs.length) % msgs.length;
       const accent = i % 2 === 0 ? theme.neon : theme.neon2;
-      ctx.fillStyle = '#05060c';
-      ctx.fillRect(x, y, bw, bh);
-      // brilho de LED
-      const g = ctx.createLinearGradient(x, y, x, y + bh);
-      g.addColorStop(0, withAlpha(accent, 0.28));
-      g.addColorStop(1, withAlpha(accent, 0.06));
-      ctx.fillStyle = g;
-      ctx.fillRect(x, y, bw, bh);
+      ctx.drawImage(this.boardLayer(accent, bw, bh, false), x, y, bw, bh);
       // texto pisca suavemente em sequência
       const pulse = 0.75 + 0.25 * Math.sin(this.time * 3 + i);
       ctx.fillStyle = withAlpha(i % 3 === 0 ? '#ffffff' : accent, pulse);
       ctx.fillText(msgs[idx], x + bw / 2, y + bh / 2 + 1);
-      // grade de pixels
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      for (let py = y + 2; py < y + bh; py += 3) ctx.fillRect(x, py, bw, 1);
-      ctx.fillStyle = withAlpha(accent, 0.9);
-      ctx.fillRect(x, y, bw, 1);
+      // grade de pixels por cima do texto
+      ctx.drawImage(this.boardLayer(accent, bw, bh, true), x, y, bw, bh);
     }
   }
 
@@ -427,10 +552,15 @@ export class RaceRenderer {
     this.drawCurb(L.trackBottom, 10);
 
     // asfalto
+    // em pixels reais, deslocamento inteiro: cópia 1:1 da textura
     ctx.save();
-    ctx.translate(-(((this.camX % 128) + 128) % 128), 0);
+    const m = ctx.getTransform();
+    const tile = this.noiseTile;
+    const shift = Math.round(this.camX * this.dpr) % tile;
+    ctx.setTransform(1, 0, 0, 1, Math.round(m.e) - ((shift + tile) % tile), Math.round(m.f));
     ctx.fillStyle = this.noise ?? theme.asphalt;
-    ctx.fillRect(0, L.trackTop, L.w + 256, L.trackBottom - L.trackTop);
+    const top = Math.round(L.trackTop * this.dpr);
+    ctx.fillRect(0, top, Math.ceil(L.w * this.dpr) + tile * 2, Math.round(L.trackBottom * this.dpr) - top);
     ctx.restore();
 
     // marcas de pneu escuras no meio das faixas
@@ -846,11 +976,11 @@ export class RaceRenderer {
   private drawVignette(k: number, nitro = false) {
     const { ctx, layout: L } = this;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const g = ctx.createRadialGradient(L.w / 2, L.h / 2, Math.min(L.w, L.h) * 0.3, L.w / 2, L.h / 2, Math.max(L.w, L.h) * 0.75);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, `rgba(0,0,0,${0.45 + k * 0.2})`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, L.w, L.h);
+    if (this.vignette) {
+      ctx.globalAlpha = 0.45 + k * 0.2;
+      ctx.drawImage(this.vignette, 0, 0, L.w, L.h);
+      ctx.globalAlpha = 1;
+    }
     if (nitro) {
       // bordas da tela brilham na cor do nitro
       const pulse = 0.18 + 0.08 * Math.sin(this.time * 18);

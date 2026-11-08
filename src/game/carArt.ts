@@ -456,9 +456,16 @@ function drawWheelLayer(
   const H = Math.ceil((maskRy * 2 + 8) * k * Q);
   if (W < 2 || H < 2) return;
   if (!scratch) scratch = document.createElement('canvas');
-  scratch.width = W;
-  scratch.height = H;
+  // só cresce: trocar o tamanho do canvas a cada roda custa caro
+  if (scratch.width < W || scratch.height < H) {
+    scratch.width = Math.max(scratch.width, W);
+    scratch.height = Math.max(scratch.height, H);
+  }
   const o = scratch.getContext('2d')!;
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalCompositeOperation = 'source-over';
+  o.globalAlpha = 1;
+  o.clearRect(0, 0, W, H);
 
   // rotação com rastro de movimento em alta velocidade
   const passes: [number, number][] = blur > 0.05 ? [[0, 1], [0.16 * blur, 0.45 * blur], [-0.16 * blur, 0.45 * blur]] : [[0, 1]];
@@ -486,7 +493,8 @@ function drawWheelLayer(
   g.addColorStop(1 - feather, '#000');
   g.addColorStop(1, 'rgba(0,0,0,0)');
   o.fillStyle = g;
-  o.fillRect(-R * 2, -R, R * 4, R * 2);
+  // cobre a área inteira da camada (fora da elipse o gradiente é transparente)
+  o.fillRect(-W * 2, -H * 2, W * 4, H * 4);
   o.restore();
 
   // o topo do pneu pode ficar sob o para-lama: some suavemente ali
@@ -499,7 +507,7 @@ function drawWheelLayer(
   }
   o.globalCompositeOperation = 'source-over';
 
-  ctx.drawImage(scratch, left + cx * k - W / (2 * Q), top + cy * k - H / (2 * Q), W / Q, H / Q);
+  ctx.drawImage(scratch, 0, 0, W, H, left + cx * k - W / (2 * Q), top + cy * k - H / (2 * Q), W / Q, H / Q);
 }
 
 /**
