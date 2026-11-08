@@ -36,7 +36,7 @@ Na aba **Curso**, 10 lições ensinam a digitar com os dez dedos no teclado ABNT
 
 ## Versão desktop (.exe para testes)
 
-A pasta `desktop/` empacota o jogo compilado numa janela própria com Electron (uso pessoal, sem login Google).
+A pasta `desktop/` empacota o jogo compilado numa janela própria com Electron (uso pessoal).
 
 ```bash
 npm run build          # na raiz: compila o jogo
@@ -45,7 +45,7 @@ npm install
 npm run dist           # gera desktop/release/win-unpacked/TypeCar.exe
 ```
 
-Dentro do app: F11 tela cheia, F12 ferramentas de desenvolvedor. Rodar com `--unlimited` tira o limite de 60 fps.
+Dentro do app: F11 tela cheia, F12 ferramentas de desenvolvedor. Rodar com `--unlimited` tira o limite de 60 fps. O jogo é servido em `http://localhost:47652`, então o login com Google funciona.
 
 ## Arquitetura
 

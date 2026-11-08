@@ -6,6 +6,7 @@ import { GameButton } from './GameButton';
 import { audio } from '../lib/audio';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { desktopSignIn, isDesktop } from '../lib/desktopAuth';
 
 interface Props {
   open: boolean;
@@ -48,11 +49,18 @@ export function SettingsModal({ open, onClose }: Props) {
     if (!auth) return;
     setAuthMsg(null);
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      if (isDesktop()) {
+        // no app desktop o login acontece no navegador do sistema
+        setAuthMsg('Termine o login na página que abriu no seu navegador…');
+        await desktopSignIn();
+        setAuthMsg(null);
+      } else await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (e) {
       const code = (e as { code?: string }).code ?? '';
       setAuthMsg(
-        code === 'auth/operation-not-allowed'
+        code === 'auth/timeout'
+          ? 'O login no navegador não foi concluído. Tente de novo.'
+          : code === 'auth/operation-not-allowed'
           ? 'Ative o login com Google no console do Firebase (Authentication > Método de login).'
           : code === 'auth/popup-closed-by-user'
             ? null
