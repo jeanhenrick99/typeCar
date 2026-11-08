@@ -15,6 +15,7 @@ import { Countdown } from '../components/race/Countdown';
 import { RaceProgress, type RaceProgressHandle } from '../components/race/RaceProgress';
 import { RaceHud, type HudData } from '../components/race/RaceHud';
 import { ResultsScreen } from './ResultsScreen';
+import { getCosmetic, type RaceReward } from '../lib/progression';
 import type { RaceResult } from '../types';
 
 interface Props {
@@ -40,7 +41,7 @@ export function RaceScreen({ onExit, onRestart }: Props) {
   const [, setTypingTick] = useState(0);
   const [focused, setFocused] = useState(false);
   const [toast, setToast] = useState<{ id: number; text: string; good: boolean } | null>(null);
-  const [result, setResult] = useState<{ r: RaceResult; newBest: boolean } | null>(null);
+  const [result, setResult] = useState<{ r: RaceResult; newBest: boolean; reward: RaceReward } | null>(null);
   const [hud, setHud] = useState<HudData>({
     timeMs: 0,
     wpm: 0,
@@ -117,7 +118,7 @@ export function RaceScreen({ onExit, onRestart }: Props) {
         onFinish: (r: RaceResult) => {
           audio.stopEngine();
           inputRef.current?.blur();
-          const { newBest } = recordResult(r);
+          const { newBest, reward } = recordResult(r);
           if (r.finished && r.chars > 0) {
             void submitScore({
               player: profile.nickname,
@@ -130,7 +131,7 @@ export function RaceScreen({ onExit, onRestart }: Props) {
             });
           }
           setTimeout(() => {
-            setResult({ r, newBest });
+            setResult({ r, newBest, reward });
             if (r.position === 1) audio.win();
             else audio.lose();
           }, 1400);
@@ -146,7 +147,11 @@ export function RaceScreen({ onExit, onRestart }: Props) {
     const canvas = canvasRef.current;
     const box = canvasBoxRef.current;
     if (!canvas || !box) return;
-    const renderer = new RaceRenderer(canvas, race, track);
+    const renderer = new RaceRenderer(canvas, race, track, {
+      rim: getCosmetic('wheel', profile.wheel).color,
+      neon: getCosmetic('neon', profile.neon).color,
+      smoke: getCosmetic('smoke', profile.smoke).color ?? '#00d4ff',
+    });
     rendererRef.current = renderer;
 
     const ro = new ResizeObserver(() => renderer.resize());
@@ -351,7 +356,7 @@ export function RaceScreen({ onExit, onRestart }: Props) {
       </section>
 
       <AnimatePresence>
-        {result && <ResultsScreen result={result.r} newBest={result.newBest} racers={race.standings()} onRetry={onRestart} onMenu={onExit} />}
+        {result && <ResultsScreen result={result.r} newBest={result.newBest} reward={result.reward} racers={race.standings()} onRetry={onRestart} onMenu={onExit} />}
       </AnimatePresence>
     </div>
   );

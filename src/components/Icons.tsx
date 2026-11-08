@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 type P = { className?: string };
 
 const base = 'w-5 h-5';
@@ -74,5 +76,18 @@ export const IconUser = ({ className = base }: P) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
     <circle cx="12" cy="8" r="4" />
     <path d="M4 21a8 8 0 0 1 16 0" />
+  </svg>
+);
+
+export const IconShare = ({ className = base }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+    <path d="M12 3v12M7 8l5-5 5 5" />
+    <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+  </svg>
+);
+
+export const IconFlame = ({ className = base, style }: P & { style?: CSSProperties }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}>
+    <path d="M12 2c1 3.5-1.5 5.5-1.5 8 0 1.4 1 2.5 2.2 2.5 1.6 0 2.3-1.5 2-3.3C17.6 11 19 13.6 19 16a7 7 0 0 1-14 0c0-4.4 3.6-6.6 4.6-10C10.3 4.1 11 2.8 12 2z" />
   </svg>
 );

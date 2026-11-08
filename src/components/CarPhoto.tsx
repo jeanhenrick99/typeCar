@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { CAR_ART, drawCarArt, groundRatio, loadCarArt } from '../game/carArt';
+import { CAR_ART, drawCarArt, drawUnderglow, groundRatio, loadCarArt } from '../game/carArt';
+import { resolveColor } from '../lib/progression';
 import { getCarModel } from '../data/cars';
 import type { CarModelId } from '../types';
 
@@ -11,10 +12,14 @@ interface Props {
   spinning?: boolean;
   /** Sombra no chão e brilho colorido embaixo */
   shadow?: boolean;
+  /** Cor do aro (null = original) */
+  rim?: string | null;
+  /** Neon embaixo do carro (cor, 'rainbow' ou null) */
+  neon?: string | null;
 }
 
 /** Arte do carro em um canvas responsivo, com rodas animadas */
-export function CarPhoto({ model, color, className = '', spinning = false, shadow = true }: Props) {
+export function CarPhoto({ model, color, className = '', spinning = false, shadow = true, rim = null, neon = null }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const meta = CAR_ART[model];
   const pad = shadow ? 0.1 : 0.02;
@@ -56,7 +61,9 @@ export function CarPhoto({ model, color, className = '', spinning = false, shado
         ctx.fillRect(0, ground - w * 0.5, w, w);
         ctx.restore();
       }
-      drawCarArt(ctx, art, model, 0, 0, w, angle, spinning ? 1 : 0);
+      const glow = resolveColor(neon, performance.now() / 1000);
+      if (glow) drawUnderglow(ctx, w / 2, ground, w * 0.92, glow);
+      drawCarArt(ctx, art, model, 0, 0, w, angle, spinning ? 1 : 0, rim);
     };
 
     const loop = (now: number) => {
@@ -80,7 +87,7 @@ export function CarPhoto({ model, color, className = '', spinning = false, shado
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [model, color, spinning, shadow, meta]);
+  }, [model, color, spinning, shadow, meta, rim, neon]);
 
   return <canvas ref={ref} className={`block w-full ${className}`} style={{ aspectRatio: `${aspect}` }} aria-label={getCarModel(model).name} />;
 }

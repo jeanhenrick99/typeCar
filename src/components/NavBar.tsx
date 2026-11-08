@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import type { Screen } from '../types';
 import { Logo } from './Logo';
-import { IconFlag, IconGarage, IconKeyboard, IconSettings, IconTrophy, IconUser } from './Icons';
+import { IconFlag, IconFlame, IconGarage, IconKeyboard, IconSettings, IconTrophy, IconUser } from './Icons';
+import { levelInfo, liveStreak, streakTier } from '../lib/progression';
 import { useProfile } from '../state/ProfileContext';
 import { audio } from '../lib/audio';
 
@@ -64,6 +65,15 @@ export function NavBar({ current, onNavigate, onSettings }: Props) {
             <IconUser className="h-4 w-4 text-volt" />
             <span className="font-hud text-sm font-bold tracking-wider">{profile.nickname}</span>
             {user && <span className="ml-1 h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" title="Conectado" />}
+            <span className="ml-1 rounded-sm bg-volt/15 px-1.5 font-display text-[10px] font-black text-volt" title="Nível do piloto">
+              NV {levelInfo(profile.xp).level}
+            </span>
+            {liveStreak(profile.streak) > 0 && (
+              <span className="flex items-center gap-0.5 font-display text-xs font-black" style={{ color: streakTier(liveStreak(profile.streak)).color }} title="Dias seguidos jogando">
+                <IconFlame className="h-4 w-4" />
+                {liveStreak(profile.streak)}
+              </span>
+            )}
           </div>
           <button
             onClick={() => {

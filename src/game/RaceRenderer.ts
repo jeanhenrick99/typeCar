@@ -1,6 +1,7 @@
 import type { RaceController, Racer } from './RaceController';
 import { withAlpha } from './colors';
-import { CAR_ART, drawCarArt, getCarArt, groundRatio } from './carArt';
+import { CAR_ART, drawCarArt, drawUnderglow, getCarArt, groundRatio } from './carArt';
+import { colorRGB, resolveColor } from '../lib/progression';
 import { getCarModel } from '../data/cars';
 import { drawBackdrop, drawForegroundProps, drawTrackDetails, kickupColor, Weather, type Scene } from './scenery';
 import type { TrackTheme } from '../types';
@@ -28,6 +29,14 @@ interface Layout {
   trackLen: number;
   startX: number;
   carLen: number;
+}
+
+/** Peças visuais do carro do jogador */
+export interface PlayerLook {
+  rim: string | null;
+  neon: string | null;
+  /** Cor da chama e fumaça do nitro (hex ou 'rainbow') */
+  smoke: string;
 }
 
 const LANES = 4;
@@ -61,8 +70,10 @@ export class RaceRenderer {
   private shake = 0;
   private wheelAngle = new Map<string, number>();
   private weather: Weather;
+  private look: PlayerLook;
 
-  constructor(canvas: HTMLCanvasElement, race: RaceController, theme: TrackTheme) {
+  constructor(canvas: HTMLCanvasElement, race: RaceController, theme: TrackTheme, look: PlayerLook = { rim: null, neon: null, smoke: '#00d4ff' }) {
+    this.look = look;
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false })!;
     this.race = race;
@@ -125,7 +136,7 @@ export class RaceRenderer {
     const r = this.race.player;
     const x = this.carWorldX(r) - this.layout.carLen * 0.55;
     const y = this.laneGround(r.lane) - this.layout.carLen * 0.1;
-    for (let i = 0; i < 18; i++) this.spawn(x, y + (Math.random() - 0.5) * 10, 'rgba(0,212,255,', 0.7, 3);
+    for (let i = 0; i < 18; i++) this.spawn(x, y + (Math.random() - 0.5) * 10, this.smokeRGBA(i * 0.2), 0.7, 3);
     this.shake = Math.max(this.shake, 6);
   }
 
@@ -166,6 +177,12 @@ export class RaceRenderer {
   private carWorldX(r: Racer) {
     const L = this.layout;
     return L.startX - L.carLen * 0.55 + r.visualProgress * L.trackLen;
+  }
+
+  /** Cor da fumaça do nitro no formato 'rgba(r,g,b,' usado pelas partículas */
+  private smokeRGBA(offset = 0) {
+    const [r, g, b] = colorRGB(this.look.smoke, this.time + offset);
+    return `rgba(${r},${g},${b},`;
   }
 
   private spawn(x: number, y: number, color: string, life: number, size: number) {
@@ -615,7 +632,7 @@ export class RaceRenderer {
 
     // partículas de escapamento
     if (this.race.phase === 'racing' && r.speed > 40 && Math.random() < dt * (10 + speedK * 30)) {
-      this.spawn(wx - len / 2, exhaustY + (Math.random() - 0.5) * 4, nitro ? 'rgba(0,212,255,' : 'rgba(180,190,210,', 0.6, 2.2);
+      this.spawn(wx - len / 2, exhaustY + (Math.random() - 0.5) * 4, nitro ? this.smokeRGBA(Math.random()) : 'rgba(180,190,210,', 0.6, 2.2);
     }
 
     // poeira, neve ou spray levantados pelos pneus
@@ -630,8 +647,10 @@ export class RaceRenderer {
     ctx.ellipse(x, ground, len * 0.52, Math.max(3, len * 0.045), 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // brilho sob o carro do jogador
-    if (r.isPlayer) {
+    // brilho sob o carro do jogador: neon escolhido na garagem, ou a cor do carro
+    const neon = r.isPlayer ? resolveColor(this.look.neon, this.time) : null;
+    if (neon) drawUnderglow(ctx, x, ground - len * 0.01, len * 0.95, neon);
+    else if (r.isPlayer) {
       ctx.save();
       ctx.translate(x, ground);
       ctx.scale(1, 0.18);
@@ -671,8 +690,10 @@ export class RaceRenderer {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const g = ctx.createLinearGradient(bx, 0, bx - fl, 0);
-      g.addColorStop(0, nitro ? 'rgba(160,240,255,0.95)' : 'rgba(255,200,120,0.9)');
-      g.addColorStop(0.4, nitro ? 'rgba(0,150,255,0.6)' : 'rgba(255,90,0,0.6)');
+      const [sr, sg, sb] = colorRGB(this.look.smoke, this.time);
+      const core = `rgba(${Math.round(sr + (255 - sr) * 0.65)},${Math.round(sg + (255 - sg) * 0.65)},${Math.round(sb + (255 - sb) * 0.65)},0.95)`;
+      g.addColorStop(0, nitro ? core : 'rgba(255,200,120,0.9)');
+      g.addColorStop(0.4, nitro ? `rgba(${sr},${sg},${sb},0.65)` : 'rgba(255,90,0,0.6)');
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g;
       const fh = Math.max(3, carH * 0.08);
@@ -691,7 +712,7 @@ export class RaceRenderer {
     const radiusPx = Math.max(4, meta.wheels[0][5] * (len / meta.w));
     const angle = ((this.wheelAngle.get(r.id) ?? 0) + (r.speed * 0.9 * dt) / radiusPx) % (Math.PI * 2);
     this.wheelAngle.set(r.id, angle);
-    if (art) drawCarArt(ctx, art, r.car, left, top, len, angle, Math.min(1, r.speed / 120));
+    if (art) drawCarArt(ctx, art, r.car, left, top, len, angle, Math.min(1, r.speed / 120), r.isPlayer ? this.look.rim : null);
 
     // brilho das lanternas
     ctx.save();
@@ -831,11 +852,12 @@ export class RaceRenderer {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, L.w, L.h);
     if (nitro) {
-      // bordas da tela brilham em azul durante o nitro
+      // bordas da tela brilham na cor do nitro
       const pulse = 0.18 + 0.08 * Math.sin(this.time * 18);
+      const c = this.smokeRGBA();
       const ng = ctx.createRadialGradient(L.w / 2, L.h / 2, Math.min(L.w, L.h) * 0.45, L.w / 2, L.h / 2, Math.max(L.w, L.h) * 0.75);
-      ng.addColorStop(0, 'rgba(0,212,255,0)');
-      ng.addColorStop(1, `rgba(0,212,255,${pulse})`);
+      ng.addColorStop(0, `${c}0)`);
+      ng.addColorStop(1, `${c}${pulse})`);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = ng;

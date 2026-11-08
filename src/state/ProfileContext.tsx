@@ -1,10 +1,20 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { CarModelId, DifficultyId, RaceResult } from '../types';
 import { loadJSON, saveJSON } from '../lib/storage';
 import { audio } from '../lib/audio';
 import { auth } from '../lib/firebase';
 import { CAR_MODELS } from '../data/cars';
+import {
+  advanceStreak,
+  DEFAULT_LOOK,
+  EMPTY_STREAK,
+  levelInfo,
+  newlyUnlocked,
+  raceXp,
+  type RaceReward,
+  type Streak,
+} from '../lib/progression';
 
 export interface Profile {
   nickname: string;
@@ -18,6 +28,13 @@ export interface Profile {
   sfx: boolean;
   engineSound: boolean;
   stats: { races: number; wins: number; podiums: number; bestWpm: number; bestAccuracy: number };
+  /** XP total acumulado */
+  xp: number;
+  streak: Streak;
+  /** Peças visuais escolhidas (ids de COSMETICS) */
+  wheel: string;
+  neon: string;
+  smoke: string;
 }
 
 const DEFAULT_PROFILE: Profile = {
@@ -31,6 +48,9 @@ const DEFAULT_PROFILE: Profile = {
   sfx: true,
   engineSound: true,
   stats: { races: 0, wins: 0, podiums: 0, bestWpm: 0, bestAccuracy: 0 },
+  xp: 0,
+  streak: EMPTY_STREAK,
+  ...DEFAULT_LOOK,
 };
 
 const KEY = 'typecar:profile';
@@ -38,7 +58,7 @@ const KEY = 'typecar:profile';
 interface Ctx {
   profile: Profile;
   update: (patch: Partial<Profile>) => void;
-  recordResult: (r: RaceResult) => { newBest: boolean };
+  recordResult: (r: RaceResult) => { newBest: boolean; reward: RaceReward };
   user: User | null;
 }
 
@@ -51,8 +71,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     const known = CAR_MODELS.some((c) => c.id === p.carId);
     const carId = known ? p.carId : DEFAULT_PROFILE.carId;
     const color = known ? p.color : DEFAULT_PROFILE.color;
-    return { ...p, carId, color, stats: { ...DEFAULT_PROFILE.stats, ...p.stats } };
+    return { ...p, carId, color, stats: { ...DEFAULT_PROFILE.stats, ...p.stats }, streak: { ...EMPTY_STREAK, ...p.streak } };
   });
+  // perfil mais recente, para calcular recompensas sem depender de closures antigas
+  const latest = useRef(profile);
+  latest.current = profile;
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => saveJSON(KEY, profile), [profile]);
@@ -70,23 +93,42 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback((patch: Partial<Profile>) => setProfile((p) => ({ ...p, ...patch })), []);
 
-  const recordResult = useCallback(
-    (r: RaceResult) => {
-      const newBest = r.finished && r.wpm > profile.stats.bestWpm;
-      setProfile((p) => ({
-        ...p,
-        stats: {
-          races: p.stats.races + 1,
-          wins: p.stats.wins + (r.position === 1 ? 1 : 0),
-          podiums: p.stats.podiums + (r.position <= 3 ? 1 : 0),
-          bestWpm: r.finished ? Math.max(p.stats.bestWpm, r.wpm) : p.stats.bestWpm,
-          bestAccuracy: r.finished ? Math.max(p.stats.bestAccuracy, r.accuracy) : p.stats.bestAccuracy,
-        },
-      }));
-      return { newBest };
-    },
-    [profile.stats.bestWpm],
-  );
+  const recordResult = useCallback((r: RaceResult) => {
+    const p = latest.current;
+    const newBest = r.finished && r.wpm > p.stats.bestWpm;
+    const played = r.chars > 0;
+    const { streak, firstToday } = played ? advanceStreak(p.streak) : { streak: p.streak, firstToday: false };
+    const xpLines = raceXp(r, firstToday, streak.count);
+    const xpGained = xpLines.reduce((a, l) => a + l.xp, 0);
+    const xpTotal = p.xp + xpGained;
+    const levelBefore = levelInfo(p.xp).level;
+    const levelAfter = levelInfo(xpTotal).level;
+    const reward: RaceReward = {
+      xpLines,
+      xpGained,
+      xpTotal,
+      levelBefore,
+      levelAfter,
+      streak: streak.count,
+      firstToday,
+      unlocked: newlyUnlocked(levelBefore, levelAfter, p.streak.best, streak.best),
+    };
+    const next: Profile = {
+      ...p,
+      xp: xpTotal,
+      streak,
+      stats: {
+        races: p.stats.races + 1,
+        wins: p.stats.wins + (r.position === 1 ? 1 : 0),
+        podiums: p.stats.podiums + (r.position <= 3 ? 1 : 0),
+        bestWpm: r.finished ? Math.max(p.stats.bestWpm, r.wpm) : p.stats.bestWpm,
+        bestAccuracy: r.finished ? Math.max(p.stats.bestAccuracy, r.accuracy) : p.stats.bestAccuracy,
+      },
+    };
+    latest.current = next;
+    setProfile(next);
+    return { newBest, reward };
+  }, []);
 
   const value = useMemo(() => ({ profile, update, recordResult, user }), [profile, update, recordResult, user]);
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;

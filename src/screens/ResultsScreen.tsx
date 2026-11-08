@@ -1,13 +1,20 @@
-import { motion } from 'framer-motion';
-import { useMemo } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useMemo, useState } from 'react';
 import type { RaceResult } from '../types';
 import type { Racer } from '../game/RaceController';
 import { GameButton } from '../components/GameButton';
-import { IconBack, IconRestart, IconTrophy } from '../components/Icons';
+import { IconBack, IconFlame, IconRestart, IconShare, IconTrophy } from '../components/Icons';
+import { ShareModal } from '../components/ShareModal';
+import { getCosmetic, levelInfo, resolveColor, streakTier, type Cosmetic, type RaceReward } from '../lib/progression';
+import { useProfile } from '../state/ProfileContext';
+import { getTrack } from '../data/tracks';
+import { getDifficulty } from '../data/difficulties';
+import type { CardData } from '../lib/shareCard';
 
 interface Props {
   result: RaceResult;
   newBest: boolean;
+  reward: RaceReward;
   racers: Racer[];
   onRetry: () => void;
   onMenu: () => void;
@@ -78,7 +85,101 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Props) {
+const KIND_NAME: Record<Cosmetic['kind'], string> = { paint: 'Pintura', wheel: 'Rodas', neon: 'Neon', smoke: 'Nitro' };
+
+/** XP ganho, barra de nível, sequência de dias e itens liberados */
+function RewardPanel({ reward }: { reward: RaceReward }) {
+  const info = levelInfo(reward.xpTotal);
+  const before = levelInfo(reward.xpTotal - reward.xpGained);
+  const leveled = reward.levelAfter > reward.levelBefore;
+  const startRatio = leveled ? 0 : before.ratio;
+  const tier = streakTier(reward.streak);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.7 }}
+      className="cut-corner glass mt-2 flex w-full flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 sm:mt-3"
+    >
+      <div className="flex items-baseline gap-2" title={reward.xpLines.map((l) => `${l.label}: +${l.xp}`).join(' · ')}>
+        <span className="font-display text-2xl font-black italic text-volt text-glow-volt">+{reward.xpGained}</span>
+        <span className="font-display text-[10px] font-bold tracking-[0.25em] text-white/55">XP</span>
+      </div>
+
+      <div className="min-w-[180px] flex-1">
+        <div className="mb-1 flex items-center justify-between font-display text-[10px] font-bold tracking-[0.2em]">
+          <span className={leveled ? 'text-blaze animate-pulseGlow' : 'text-white/70'}>
+            {leveled ? `SUBIU PARA O NÍVEL ${info.level}!` : `NÍVEL ${info.level}`}
+          </span>
+          <span className="font-mono text-white/40">
+            {info.into}/{info.need}
+          </span>
+        </div>
+        <div className="h-2 skew-x-[-14deg] overflow-hidden bg-black/60 ring-1 ring-white/15">
+          <motion.div
+            className="h-full bg-gradient-to-r from-blaze to-volt"
+            initial={{ width: `${startRatio * 100}%` }}
+            animate={{ width: `${info.ratio * 100}%` }}
+            transition={{ delay: 0.9, duration: 1.1, ease: 'easeOut' }}
+          />
+        </div>
+        <p className="mt-1 hidden truncate font-hud text-xs text-white/40 sm:block">
+          {reward.xpLines.map((l) => `${l.label} +${l.xp}`).join(' · ')}
+        </p>
+      </div>
+
+      {reward.streak > 0 && (
+        <div className="flex items-center gap-1.5" title={`Sequência ${tier.label}`}>
+          <IconFlame className="h-6 w-6" style={{ color: tier.color, filter: `drop-shadow(0 0 6px ${tier.color})` }} />
+          <div className="leading-none">
+            <p className="font-display text-lg font-black" style={{ color: tier.color }}>
+              {reward.streak}
+            </p>
+            <p className="font-display text-[8px] font-bold tracking-[0.2em] text-white/50">{reward.streak === 1 ? 'DIA' : 'DIAS'}</p>
+          </div>
+        </div>
+      )}
+
+      {reward.unlocked.length > 0 && (
+        <div className="flex w-full flex-wrap items-center gap-1.5">
+          <span className="font-display text-[10px] font-bold tracking-[0.2em] text-blaze">LIBERADO NA GARAGEM:</span>
+          {reward.unlocked.map((c) => (
+            <span key={c.kind + c.id} className="flex items-center gap-1.5 rounded-sm bg-white/10 px-2 py-0.5 font-hud text-xs font-semibold text-white/85">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: c.color === 'rainbow' ? 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)' : (c.color ?? '#555') }}
+              />
+              {KIND_NAME[c.kind]} {c.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+export function ResultsScreen({ result, newBest, reward, racers, onRetry, onMenu }: Props) {
+  const { profile } = useProfile();
+  const [sharing, setSharing] = useState(false);
+  const cardData = useMemo<CardData>(() => {
+    const track = getTrack(result.trackId);
+    return {
+      result,
+      nickname: profile.nickname,
+      level: reward.levelAfter,
+      streak: reward.streak,
+      car: result.carId,
+      color: profile.color,
+      rim: getCosmetic('wheel', profile.wheel).color,
+      neon: resolveColor(getCosmetic('neon', profile.neon).color, 1.2),
+      trackName: track.name,
+      trackColor: track.neon,
+      difficultyName: getDifficulty(result.difficulty).name,
+    };
+    // o card retrata o carro como estava nesta corrida
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, reward]);
+
   const win = result.position === 1;
   const podium = result.position <= 3;
   const title = win ? 'VITÓRIA!' : podium ? 'PÓDIO!' : 'FIM DE PROVA';
@@ -172,6 +273,8 @@ export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Prop
           ))}
         </div>
 
+        <RewardPanel reward={reward} />
+
         <div className="mt-2 grid w-full gap-2 sm:mt-3 sm:grid-cols-[1.4fr_1fr] sm:gap-3">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="cut-corner glass hidden px-4 py-2.5 sm:block">
             <p className="hud-label mb-1">Ritmo durante a corrida (PPM)</p>
@@ -203,12 +306,16 @@ export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Prop
           <GameButton size="lg" onClick={onRetry} icon={<IconRestart className="h-5 w-5" />}>
             Jogar novamente
           </GameButton>
-          <GameButton size="lg" variant="secondary" onClick={onMenu} icon={<IconBack className="h-5 w-5" />}>
-            Voltar ao menu
+          <GameButton size="lg" variant="secondary" onClick={() => setSharing(true)} icon={<IconShare className="h-5 w-5" />}>
+            Compartilhar
+          </GameButton>
+          <GameButton size="lg" variant="ghost" onClick={onMenu} icon={<IconBack className="h-5 w-5" />}>
+            Menu
           </GameButton>
         </motion.div>
         <p className="mt-2 hidden font-hud text-sm text-white/30 sm:block">Enter para correr de novo · Esc para o menu</p>
       </div>
+      <AnimatePresence>{sharing && <ShareModal data={cardData} onClose={() => setSharing(false)} />}</AnimatePresence>
     </motion.div>
   );
 }

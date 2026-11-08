@@ -22,6 +22,14 @@ Abra http://localhost:5173. Para gerar a versão de produção: `npm run build`.
 - 4 pistas com cenário e clima próprios: Neon City (noite chuvosa), Sunset Coast (pôr do sol no mar), Solar Desert (deserto com poeira) e Arctic Ring (neve e aurora boreal). Escolha na Garagem.
 - **Esc** sai da corrida, **Enter** na tela de resultado corre de novo.
 
+## Progressão
+
+- Cada corrida dá **XP**: participação, desempenho (PPM × precisão), posição, bônus sem erros e bônus da primeira corrida do dia.
+- Subindo de nível você libera na Garagem pinturas extras, cores de **rodas**, **neon** embaixo do carro e cores da **chama do nitro**.
+- Jogar dias seguidos mantém a **sequência** (a chama muda de cor com 3, 7, 14 e 30 dias) e libera itens especiais, como o nitro rosa (3 dias), o neon arco-íris (7) e o nitro arco-íris (14).
+- Na tela de resultado, **Compartilhar** gera uma imagem com o carro, o PPM e a posição nos formatos Stories/TikTok (9:16) ou Feed (4:5), pronta para baixar ou enviar pelo celular.
+- O progresso fica salvo no navegador.
+
 ## Curso de digitação
 
 Na aba **Curso**, 10 lições ensinam a digitar com os dez dedos no teclado ABNT2: posição inicial (ASDF JKLÇ), fileiras de cima e de baixo, maiúsculas com Shift, acentos e textos completos. Durante os exercícios, o teclado virtual destaca a próxima tecla e as mãos mostram qual dedo usar. Cada lição dá até 3 estrelas (precisão e PPM) e libera a próxima. O progresso fica salvo no navegador.

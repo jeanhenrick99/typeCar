@@ -344,6 +344,94 @@ const Q = 2;
 
 let scratch: HTMLCanvasElement | null = null;
 
+/** Fontes de roda com o aro repintado, por arte e cor */
+const tintedWheels = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
+
+/**
+ * Copia a fonte das rodas pintando só o aro (dentro da elipse do aro).
+ * O brilho de cada pixel é esticado para manter raios e sombras visíveis
+ * mesmo em aros pretos.
+ */
+function tintedWheelSource(src: HTMLCanvasElement, meta: CarArtMeta, rim: string): HTMLCanvasElement {
+  let byColor = tintedWheels.get(src);
+  if (!byColor) tintedWheels.set(src, (byColor = new Map()));
+  const done = byColor.get(rim);
+  if (done) return done;
+
+  const n = parseInt(rim.replace('#', ''), 16);
+  const tr = (n >> 16) & 255, tg = (n >> 8) & 255, tb = n & 255;
+  const out = document.createElement('canvas');
+  out.width = src.width;
+  out.height = src.height;
+  const o = out.getContext('2d', { willReadFrequently: true })!;
+  o.drawImage(src, 0, 0);
+  const sx = src.width / meta.w;
+  for (const [hx, hy, , , rx, ry] of meta.wheels) {
+    const ax = rx * RIM_RATIO * sx;
+    const ay = ry * RIM_RATIO * sx;
+    const x0 = Math.max(0, Math.floor(hx * sx - ax));
+    const y0 = Math.max(0, Math.floor(hy * sx - ay));
+    const w = Math.min(out.width - x0, Math.ceil(ax * 2) + 1);
+    const h = Math.min(out.height - y0, Math.ceil(ay * 2) + 1);
+    const data = o.getImageData(x0, y0, w, h);
+    const d = data.data;
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const dx = (x0 + x - hx * sx) / ax;
+        const dy = (y0 + y - hy * sx) / ay;
+        const r = Math.sqrt(dx * dx + dy * dy);
+        if (r > 1) continue;
+        const i = (y * w + x) * 4;
+        const L = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
+        const Ls = Math.min(1, Math.max(0, (L - 0.015) * 3.2));
+        const k = 0.12 + 0.95 * Ls;
+        // reflexos fortes continuam claros
+        const hi = Math.max(0, (L - 0.55) / 0.45);
+        let nr = tr * k, ng = tg * k, nb = tb * k;
+        nr += (d[i] - nr) * hi;
+        ng += (d[i + 1] - ng) * hi;
+        nb += (d[i + 2] - nb) * hi;
+        // borda suave para não marcar o pneu
+        const a = r > 0.9 ? (1 - r) / 0.1 : 1;
+        d[i] = d[i] + (Math.min(255, nr) - d[i]) * a;
+        d[i + 1] = d[i + 1] + (Math.min(255, ng) - d[i + 1]) * a;
+        d[i + 2] = d[i + 2] + (Math.min(255, nb) - d[i + 2]) * a;
+      }
+    o.putImageData(data, x0, y0);
+  }
+  byColor.set(rim, out);
+  return out;
+}
+
+/**
+ * Neon embaixo do carro: faixa de luz colada no chão, entre as rodas.
+ * `cx` é o centro do carro, `ground` a linha do chão e `len` a largura.
+ */
+export function drawUnderglow(ctx: CanvasRenderingContext2D, cx: number, ground: number, len: number, color: string, intensity = 1) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.translate(cx, ground);
+  ctx.scale(1, 0.16);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, len * 0.62);
+  g.addColorStop(0, color);
+  g.addColorStop(0.45, color);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = 0.55 * intensity;
+  ctx.fillStyle = g;
+  ctx.fillRect(-len, -len, len * 2, len * 2);
+  ctx.restore();
+  // tubo de luz sob a soleira
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.9 * intensity;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = Math.max(6, len * 0.04);
+  ctx.fillStyle = color;
+  const th = Math.max(1.5, len * 0.006);
+  ctx.fillRect(cx - len * 0.3, ground - len * 0.012 - th / 2, len * 0.6, th);
+  ctx.restore();
+}
+
 /**
  * Desenha uma camada da roda girando em perspectiva: a elipse é convertida
  * em círculo, girada e achatada de volta. A máscara elíptica tem borda suave
@@ -427,12 +515,15 @@ export function drawCarArt(
   width: number,
   angle: number,
   blur = 0,
+  /** Cor do aro (null = original) */
+  rim: string | null = null,
 ) {
   const meta = CAR_ART[model];
   const k = width / meta.w;
   ctx.drawImage(art, left, top, width, meta.h * k);
-  if (angle === 0 && blur === 0) return;
-  const wheelArt = wheelSources.get(art) ?? art;
+  if (angle === 0 && blur === 0 && !rim) return;
+  const baseWheels = wheelSources.get(art) ?? art;
+  const wheelArt = rim ? tintedWheelSource(baseWheels, meta, rim) : baseWheels;
   for (const [hx, hy, tx, ty, rx, ry] of meta.wheels) {
     const f = rx / ry;
     // pneu inteiro gira em torno do próprio centro…
