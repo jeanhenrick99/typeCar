@@ -153,6 +153,7 @@ function createWindow(port) {
     backgroundColor: '#05070d',
     autoHideMenuBar: true,
     title: 'TypeCar',
+    icon: path.join(__dirname, 'icon.ico'),
     webPreferences: { backgroundThrottling: false },
   });
   mainWin = win;
