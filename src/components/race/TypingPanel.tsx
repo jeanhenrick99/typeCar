@@ -40,22 +40,22 @@ export const TypingPanel = memo(function TypingPanel({ text, states, overflow, c
     return out;
   }, [text]);
 
-  // Mantém a linha atual visível
+  // A linha que está sendo digitada fica no topo da caixa, deixando as
+  // próximas linhas sempre visíveis logo abaixo
   useEffect(() => {
     const el = caretRef.current;
     const box = containerRef.current;
     if (!el || !box) return;
-    const top = el.offsetTop;
-    const lineH = el.offsetHeight || 32;
-    if (top > box.scrollTop + box.clientHeight - lineH * 1.5 || top < box.scrollTop) {
-      box.scrollTo({ top: Math.max(0, top - lineH), behavior: 'smooth' });
-    }
+    const lineH = parseFloat(getComputedStyle(box).lineHeight) || el.offsetHeight || 32;
+    const line = Math.floor((el.offsetTop + el.offsetHeight / 2) / lineH);
+    const target = line * lineH;
+    if (Math.abs(box.scrollTop - target) > 1) box.scrollTo({ top: target, behavior: 'smooth' });
   }, [caretIndex]);
 
   return (
     <div
       ref={containerRef}
-      className={`relative max-h-[7.5rem] sm:max-h-[8.6rem] overflow-hidden font-mono text-lg sm:text-2xl leading-[2.2rem] sm:leading-[2.6rem] tracking-wide transition-opacity ${
+      className={`relative h-[6.6rem] sm:h-[7.8rem] overflow-hidden font-mono text-lg sm:text-2xl leading-[2.2rem] sm:leading-[2.6rem] tracking-wide transition-opacity ${
         active ? 'opacity-100' : 'opacity-60'
       }`}
     >
