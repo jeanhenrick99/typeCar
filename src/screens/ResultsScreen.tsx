@@ -56,7 +56,7 @@ function Sparkline({ values }: { values: number[] }) {
   const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - (v / max) * (h - 6) - 3]);
   const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-16 w-full" preserveAspectRatio="none">
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-12 w-full" preserveAspectRatio="none">
       <defs>
         <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#00d4ff" stopOpacity="0.4" />
@@ -111,24 +111,25 @@ export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Prop
         style={{ background: `radial-gradient(ellipse at 50% 0%, ${accent}40 0%, transparent 60%)` }}
       />
 
-      <div className="relative mx-auto flex min-h-full max-w-4xl flex-col items-center justify-center px-4 py-10">
+      {/* layout compacto: cabe inteiro na tela, sem precisar rolar */}
+      <div className="relative mx-auto flex min-h-full max-w-5xl flex-col items-center justify-center px-4 py-4 sm:py-6">
         <motion.div
           initial={{ scale: 0.4, opacity: 0, rotate: -8 }}
           animate={{ scale: 1, opacity: 1, rotate: 0 }}
           transition={{ type: 'spring', stiffness: 200, damping: 14 }}
-          className="relative mb-2"
+          className="relative mb-1"
         >
           {win ? (
             <motion.div
               animate={{ rotate: [0, -6, 6, 0], y: [0, -6, 0] }}
               transition={{ duration: 2.4, repeat: Infinity }}
-              className="grid h-20 w-20 place-items-center rounded-full bg-gradient-to-b from-yellow-300 to-blaze text-asphalt-950 shadow-[0_0_60px_rgba(255,170,0,0.8)]"
+              className="grid h-14 w-14 place-items-center rounded-full bg-gradient-to-b from-yellow-300 to-blaze text-asphalt-950 shadow-[0_0_50px_rgba(255,170,0,0.8)] sm:h-16 sm:w-16"
             >
-              <IconTrophy className="h-10 w-10" />
+              <IconTrophy className="h-7 w-7 sm:h-8 sm:w-8" />
             </motion.div>
           ) : (
             <div
-              className="grid h-20 w-20 place-items-center rounded-full border-2 font-display text-3xl font-black italic"
+              className="grid h-14 w-14 place-items-center rounded-full border-2 font-display text-2xl font-black italic sm:h-16 sm:w-16"
               style={{ borderColor: accent, color: accent, boxShadow: `0 0 40px ${accent}80` }}
             >
               {result.position}º
@@ -140,30 +141,30 @@ export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Prop
           initial={{ y: 30, opacity: 0, letterSpacing: '0.6em' }}
           animate={{ y: 0, opacity: 1, letterSpacing: '0.05em' }}
           transition={{ delay: 0.15, duration: 0.6, ease: 'easeOut' }}
-          className="text-center font-display text-5xl sm:text-7xl font-black italic"
+          className="text-center font-display text-4xl font-black italic sm:text-6xl"
           style={{ color: win ? '#fff' : accent, textShadow: `0 0 40px ${accent}` }}
         >
           {title}
         </motion.h2>
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mt-2 text-center font-hud text-lg text-white/60">
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mt-1 text-center font-hud text-base text-white/60 sm:text-lg">
           {subtitle}
         </motion.p>
 
-        <div className="mt-8 grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="mt-5 grid w-full grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
           {stats.map((s, i) => (
             <motion.div
               key={s.label}
               initial={{ y: 30, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.4 + i * 0.07, type: 'spring', stiffness: 260, damping: 22 }}
-              className={`cut-corner glass relative overflow-hidden px-4 py-4 ${s.highlight ? 'border-volt/40' : ''}`}
+              className={`cut-corner glass relative overflow-hidden px-3 py-2.5 sm:px-4 ${s.highlight ? 'border-volt/40' : ''}`}
             >
               <p className="hud-label">{s.label}</p>
-              <p className={`mt-1 font-display text-3xl sm:text-4xl font-black tabular-nums ${s.highlight ? 'text-volt text-glow-volt' : 'text-white'}`}>
+              <p className={`mt-1 font-display text-xl font-black tabular-nums sm:text-3xl ${s.highlight ? 'text-volt text-glow-volt' : 'text-white'}`}>
                 {s.value}
               </p>
               {s.sub && (
-                <p className={`mt-0.5 font-display text-[10px] font-bold tracking-[0.25em] ${s.sub === 'NOVO RECORDE' ? 'text-blaze animate-pulseGlow' : 'text-white/40'}`}>
+                <p className={`mt-0.5 font-display text-[9px] font-bold tracking-[0.2em] ${s.sub === 'NOVO RECORDE' ? 'text-blaze animate-pulseGlow' : 'text-white/40'}`}>
                   {s.sub}
                 </p>
               )}
@@ -171,16 +172,16 @@ export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Prop
           ))}
         </div>
 
-        <div className="mt-4 grid w-full gap-3 sm:grid-cols-[1.4fr_1fr]">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="cut-corner glass px-4 py-3">
+        <div className="mt-2 grid w-full gap-2 sm:mt-3 sm:grid-cols-[1.4fr_1fr] sm:gap-3">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="cut-corner glass hidden px-4 py-2.5 sm:block">
             <p className="hud-label mb-1">Ritmo durante a corrida (PPM)</p>
             <Sparkline values={result.wpmSamples} />
           </motion.div>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }} className="cut-corner glass px-4 py-3">
-            <p className="hud-label mb-2">Classificação</p>
-            <ol className="space-y-1">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }} className="cut-corner glass px-4 py-2.5">
+            <p className="hud-label mb-1">Classificação</p>
+            <ol className="space-y-0.5">
               {racers.map((r, i) => (
-                <li key={r.id} className={`flex items-center gap-2 font-hud text-base ${r.isPlayer ? 'font-bold text-white' : 'text-white/60'}`}>
+                <li key={r.id} className={`flex items-center gap-2 font-hud text-sm sm:text-base ${r.isPlayer ? 'font-bold text-white' : 'text-white/60'}`}>
                   <span className="w-6 font-display text-sm text-white/40">{i + 1}º</span>
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color }} />
                   <span className="flex-1 truncate">{r.isPlayer ? `${r.name} (você)` : r.name}</span>
@@ -197,7 +198,7 @@ export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Prop
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 1 }}
-          className="mt-8 flex flex-wrap justify-center gap-4"
+          className="mt-5 flex flex-wrap justify-center gap-3 sm:gap-4"
         >
           <GameButton size="lg" onClick={onRetry} icon={<IconRestart className="h-5 w-5" />}>
             Jogar novamente
@@ -206,7 +207,7 @@ export function ResultsScreen({ result, newBest, racers, onRetry, onMenu }: Prop
             Voltar ao menu
           </GameButton>
         </motion.div>
-        <p className="mt-3 font-hud text-sm text-white/30">Enter para correr de novo · Esc para o menu</p>
+        <p className="mt-2 hidden font-hud text-sm text-white/30 sm:block">Enter para correr de novo · Esc para o menu</p>
       </div>
     </motion.div>
   );
