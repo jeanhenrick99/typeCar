@@ -35,6 +35,36 @@ if (process.argv.includes('--unlimited')) {
 // O Google recusa login em navegadores "embutidos": o app se apresenta como Chrome
 app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|TypeCar|typecar-desktop)\/\S+/gi, '');
 
+/* ── Preferências do app (tela cheia) salvas na pasta de dados do usuário ── */
+let mainWin = null;
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+function loadSettings() {
+  try {
+    return { fullscreen: false, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) };
+  } catch {
+    return { fullscreen: false };
+  }
+}
+function saveSettings(patch) {
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify({ ...loadSettings(), ...patch }));
+  } catch {
+    /* sem permissão de escrita: só não lembra */
+  }
+}
+function setFullscreen(on) {
+  if (!mainWin) return;
+  mainWin.setFullScreen(on);
+  saveSettings({ fullscreen: on });
+}
+
+/** GET devolve as preferências; POST ?fullscreen=1|0 liga ou desliga a tela cheia */
+function handleSettings(req, res, url) {
+  if (req.method === 'POST' && url.searchParams.has('fullscreen')) setFullscreen(url.searchParams.get('fullscreen') === '1');
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify({ fullscreen: mainWin ? mainWin.isFullScreen() : loadSettings().fullscreen }));
+}
+
 /** Logins feitos no navegador do sistema esperando o app buscar (por código único) */
 const credentials = new Map();
 
@@ -83,6 +113,7 @@ function serve() {
       /* endereço inválido: cai no index */
     }
     if (url && pathname === '/__desktop/credential') return handleCredential(req, res, url);
+    if (url && pathname === '/__desktop/settings') return handleSettings(req, res, url);
     let file = path.normalize(path.join(ROOT, pathname));
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       file = path.join(ROOT, 'index.html');
@@ -124,12 +155,14 @@ function createWindow(port) {
     title: 'TypeCar',
     webPreferences: { backgroundThrottling: false },
   });
+  mainWin = win;
+  if (loadSettings().fullscreen) win.setFullScreen(true);
   // ?app=desktop: o jogo sabe que está no app e faz o login pelo navegador do sistema
   win.loadURL(`http://localhost:${port}/?app=desktop`);
   // F11 tela cheia, F12 ferramentas de desenvolvedor
   win.webContents.on('before-input-event', (_e, input) => {
     if (input.type !== 'keyDown') return;
-    if (input.key === 'F11') win.setFullScreen(!win.isFullScreen());
+    if (input.key === 'F11') setFullscreen(!win.isFullScreen());
     if (input.key === 'F12') win.webContents.toggleDevTools();
   });
   win.webContents.setWindowOpenHandler(({ url }) => {

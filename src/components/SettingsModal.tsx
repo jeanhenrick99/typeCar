@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useProfile } from '../state/ProfileContext';
 import { IconVolume } from './Icons';
 import { GameButton } from './GameButton';
@@ -7,6 +7,7 @@ import { audio } from '../lib/audio';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { desktopSignIn, isDesktop } from '../lib/desktopAuth';
+import { getDesktopFullscreen, getShowFps, setDesktopFullscreen, setShowFps } from '../lib/desktopApp';
 
 interface Props {
   open: boolean;
@@ -38,6 +39,13 @@ export function SettingsModal({ open, onClose }: Props) {
   const { profile, update, user, sync } = useProfile();
   const [nick, setNick] = useState(profile.nickname);
   const [authMsg, setAuthMsg] = useState<string | null>(null);
+  const desktop = isDesktop();
+  const [fullscreen, setFullscreen] = useState(false);
+  const [showFps, setShowFpsState] = useState(getShowFps);
+  // a tela cheia também muda pelo F11: lê o estado real ao abrir
+  useEffect(() => {
+    if (open && desktop) void getDesktopFullscreen().then(setFullscreen);
+  }, [open, desktop]);
 
   const saveNick = () => {
     const clean = nick.trim().toUpperCase().replace(/[^A-Z0-9_\-À-Ú ]/gi, '').slice(0, 16);
@@ -134,6 +142,30 @@ export function SettingsModal({ open, onClose }: Props) {
                 <Toggle label="Som do motor" on={profile.engineSound} onChange={(v) => update({ engineSound: v })} />
               </div>
             </section>
+
+            {desktop && (
+              <section className="mt-6">
+                <p className="hud-label mb-2">App desktop</p>
+                <div className="divide-y divide-white/5">
+                  <Toggle
+                    label="Tela cheia (F11)"
+                    on={fullscreen}
+                    onChange={(v) => {
+                      setFullscreen(v);
+                      void setDesktopFullscreen(v).then(setFullscreen);
+                    }}
+                  />
+                  <Toggle
+                    label="Mostrar FPS no canto da tela"
+                    on={showFps}
+                    onChange={(v) => {
+                      setShowFpsState(v);
+                      setShowFps(v);
+                    }}
+                  />
+                </div>
+              </section>
+            )}
 
             <section className="mt-6">
               <p className="hud-label mb-2">Conta online</p>

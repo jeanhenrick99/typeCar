@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Screen } from './types';
 import { NavBar } from './components/NavBar';
 import { SettingsModal } from './components/SettingsModal';
+import { FpsMeter } from './components/FpsMeter';
 import { MenuScreen } from './screens/MenuScreen';
 import { RaceScreen } from './screens/RaceScreen';
 import { GarageScreen } from './screens/GarageScreen';
@@ -54,6 +55,7 @@ export default function App() {
       </AnimatePresence>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <FpsMeter />
     </div>
   );
 }
