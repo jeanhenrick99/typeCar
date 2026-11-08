@@ -1,4 +1,4 @@
-import { ENGINES, EngineSound } from './engineSound';
+import { ENGINES, EngineSound, loadEngineWorklet } from './engineSound';
 import { playMagneticKey } from './keySound';
 import type { CarModelId } from '../types';
 
@@ -32,7 +32,9 @@ class AudioEngine {
 
   /** Deve ser chamado num gesto do usuário */
   unlock() {
-    this.ensure();
+    const ctx = this.ensure();
+    // deixa o motor pronto antes da largada
+    if (ctx) void loadEngineWorklet(ctx).catch(() => undefined);
   }
 
   setVolume(v: number) {
