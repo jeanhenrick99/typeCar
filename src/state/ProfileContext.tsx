@@ -5,6 +5,7 @@ import { loadJSON, saveJSON } from '../lib/storage';
 import { audio } from '../lib/audio';
 import { auth } from '../lib/firebase';
 import { CAR_MODELS } from '../data/cars';
+import { loadCloudProgress, mergeProgress, saveCloudProgress } from '../lib/cloudProgress';
 import {
   advanceStreak,
   DEFAULT_LOOK,
@@ -60,7 +61,11 @@ interface Ctx {
   update: (patch: Partial<Profile>) => void;
   recordResult: (r: RaceResult) => { newBest: boolean; reward: RaceReward };
   user: User | null;
+  /** Estado do salvamento na conta: off = sem login */
+  sync: SyncState;
 }
+
+export type SyncState = 'off' | 'loading' | 'synced' | 'error';
 
 const ProfileContext = createContext<Ctx | null>(null);
 
@@ -77,6 +82,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const latest = useRef(profile);
   latest.current = profile;
   const [user, setUser] = useState<User | null>(null);
+  const [sync, setSync] = useState<SyncState>('off');
+  // conta cujo progresso já foi carregado: só depois disso o perfil é enviado
+  const syncedUid = useRef<string | null>(null);
 
   useEffect(() => saveJSON(KEY, profile), [profile]);
 
@@ -90,6 +98,53 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     if (!auth) return;
     return onAuthStateChanged(auth, setUser);
   }, []);
+
+  // Ao entrar: traz o progresso da conta e junta com o do aparelho
+  useEffect(() => {
+    syncedUid.current = null;
+    if (!user) {
+      setSync('off');
+      return;
+    }
+    let alive = true;
+    setSync('loading');
+    loadCloudProgress(user.uid)
+      .then((cloud) => {
+        if (!alive) return;
+        const merged = cloud ? mergeProgress(latest.current, cloud) : latest.current;
+        latest.current = merged;
+        setProfile(merged);
+        syncedUid.current = user.uid;
+        setSync('synced');
+        // primeira vez nesta conta (ou progresso juntado): grava já
+        return saveCloudProgress(user.uid, merged).then(() => undefined);
+      })
+      .catch(() => alive && setSync('error'));
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  // Depois de carregado, cada mudança no perfil vai para a conta (agrupadas)
+  useEffect(() => {
+    const uid = syncedUid.current;
+    if (!uid || !user || user.uid !== uid) return;
+    const t = setTimeout(() => {
+      saveCloudProgress(uid, profile)
+        .then((merged) => {
+          setSync('synced');
+          // outro aparelho avançou mais: traz esse avanço para cá
+          const cur = latest.current;
+          if (merged.xp > cur.xp || merged.streak.best > cur.streak.best || merged.streak.lastDay > cur.streak.lastDay) {
+            const next = { ...cur, xp: merged.xp, streak: merged.streak, stats: merged.stats };
+            latest.current = next;
+            setProfile(next);
+          }
+        })
+        .catch(() => setSync('error'));
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [profile, user]);
 
   const update = useCallback((patch: Partial<Profile>) => setProfile((p) => ({ ...p, ...patch })), []);
 
@@ -130,7 +185,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     return { newBest, reward };
   }, []);
 
-  const value = useMemo(() => ({ profile, update, recordResult, user }), [profile, update, recordResult, user]);
+  const value = useMemo(() => ({ profile, update, recordResult, user, sync }), [profile, update, recordResult, user, sync]);
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 

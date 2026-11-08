@@ -34,7 +34,7 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 }
 
 export function SettingsModal({ open, onClose }: Props) {
-  const { profile, update, user } = useProfile();
+  const { profile, update, user, sync } = useProfile();
   const [nick, setNick] = useState(profile.nickname);
   const [authMsg, setAuthMsg] = useState<string | null>(null);
 
@@ -135,15 +135,24 @@ export function SettingsModal({ open, onClose }: Props) {
                   <code className="mx-1 rounded bg-white/10 px-1">.env</code> para ativar ranking global.
                 </p>
               ) : user ? (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm text-white/70">{user.displayName ?? user.email}</span>
-                  <GameButton size="md" variant="ghost" onClick={() => auth && signOut(auth)}>
-                    Sair
-                  </GameButton>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm text-white/70">{user.displayName ?? user.email}</span>
+                    <GameButton size="md" variant="ghost" onClick={() => auth && signOut(auth)}>
+                      Sair
+                    </GameButton>
+                  </div>
+                  <p className={`text-sm ${sync === 'error' ? 'text-amber-300' : 'text-emerald-300/80'}`}>
+                    {sync === 'loading'
+                      ? 'Carregando seu progresso…'
+                      : sync === 'error'
+                        ? 'Não foi possível salvar o progresso na conta. Ele continua salvo neste navegador.'
+                        : 'Nível, XP, sequência e peças salvos na sua conta.'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-sm text-white/50">Suas corridas já entram no ranking global. Entre para vincular as pontuações à sua conta.</p>
+                  <p className="text-sm text-white/50">Suas corridas já entram no ranking global. Entre com Google para salvar nível, XP e peças na sua conta e jogar em qualquer aparelho.</p>
                   <GameButton size="md" variant="secondary" onClick={signInGoogle}>
                     Entrar com Google
                   </GameButton>

@@ -17,5 +17,19 @@ service cloud.firestore {
         && (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid);
       allow update, delete: if false;
     }
+
+    // progresso de cada piloto: só o dono lê e grava
+    match /progress/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(
+          ['nickname','carId','color','trackId','difficulty','duration','stats','xp','streak','wheel','neon','smoke','updated_at'])
+        && request.resource.data.xp is int
+        && request.resource.data.xp >= 0
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() <= 16
+        && request.resource.data.updated_at == request.time;
+      allow delete: if false;
+    }
   }
 }
