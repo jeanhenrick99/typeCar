@@ -1,0 +1,34 @@
+{
+  "name": "typecar-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TypeCar em janela própria (uso pessoal, para testes)",
+  "main": "main.cjs",
+  "scripts": {
+    "copy-app": "node copy-app.cjs",
+    "start": "npm run copy-app && electron .",
+    "dist": "npm run copy-app && electron-builder --win dir"
+  },
+  "build": {
+    "appId": "com.typecar.desktop",
+    "productName": "TypeCar",
+    "files": [
+      "main.cjs",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "dir",
+      "signAndEditExecutable": false
+    }
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "allowScripts": {
+    "electron@33.2.1": true
+  }
+}

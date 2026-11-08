@@ -34,6 +34,19 @@ Abra http://localhost:5173. Para gerar a versão de produção: `npm run build`.
 
 Na aba **Curso**, 10 lições ensinam a digitar com os dez dedos no teclado ABNT2: posição inicial (ASDF JKLÇ), fileiras de cima e de baixo, maiúsculas com Shift, acentos e textos completos. Durante os exercícios, o teclado virtual destaca a próxima tecla e as mãos mostram qual dedo usar. Cada lição dá até 3 estrelas (precisão e PPM) e libera a próxima. O progresso fica salvo no navegador.
 
+## Versão desktop (.exe para testes)
+
+A pasta `desktop/` empacota o jogo compilado numa janela própria com Electron (uso pessoal, sem login Google).
+
+```bash
+npm run build          # na raiz: compila o jogo
+cd desktop
+npm install
+npm run dist           # gera desktop/release/win-unpacked/TypeCar.exe
+```
+
+Dentro do app: F11 tela cheia, F12 ferramentas de desenvolvedor. Rodar com `--unlimited` tira o limite de 60 fps.
+
 ## Arquitetura
 
 ```
